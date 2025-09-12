@@ -8,11 +8,13 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { EmployeeSelect } from '@/components/ui/employee-select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
 import { Loader2, Save, User, Briefcase, DollarSign, FileText } from 'lucide-react'
+import { EmployeeType } from '@prisma/client'
 
 const employeeFormSchema = z.object({
   firstName: z.string().min(1, 'First name is required'),
@@ -32,6 +34,7 @@ const employeeFormSchema = z.object({
   departmentId: z.string().min(1, 'Department is required'),
   joiningDate: z.string().min(1, 'Joining date is required'),
   employmentType: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN']).default('FULL_TIME'),
+  employeeType: z.enum(['NORMAL', "FIELD_EMPLOYEE"]).default('NORMAL'),
   reportingTo: z.string().optional(),
   basicSalary: z.coerce.number().positive().optional(),
   ctc: z.coerce.number().positive().optional(),
@@ -75,6 +78,7 @@ interface Employee {
   departmentId: string
   joiningDate: Date
   employmentType: string
+  employeeType: string
   reportingTo?: string | null
   basicSalary?: number | string // Prisma Decimal type
   ctc?: number | string // Prisma Decimal type
@@ -117,6 +121,7 @@ export function EmployeeForm({ employee, departments, managers, isEditing = fals
       departmentId: employee?.departmentId || '',
       joiningDate: employee?.joiningDate ? new Date(employee.joiningDate).toISOString().split('T')[0] : '',
       employmentType: (employee?.employmentType as 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'INTERN') || 'FULL_TIME',
+      employeeType: (employee?.employeeType as EmployeeType) || 'NORMAL',
       reportingTo: employee?.reportingTo || '',
       basicSalary: employee?.basicSalary ? Number(employee.basicSalary) : undefined,
       ctc: employee?.ctc ? Number(employee.ctc) : undefined,
@@ -460,7 +465,7 @@ export function EmployeeForm({ employee, departments, managers, isEditing = fals
                 name="employmentType"
                 control={control}
                 render={({ field }) => (
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select employment type" />
                     </SelectTrigger>
@@ -478,50 +483,66 @@ export function EmployeeForm({ employee, departments, managers, isEditing = fals
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="reportingTo">Reporting Manager</Label>
+              <Label htmlFor="employeeType">Employee Type</Label>
               <Controller
-                name="reportingTo"
+                name="employeeType"
                 control={control}
                 render={({ field }) => (
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select reporting manager" />
+                      <SelectValue placeholder="Select employee type" />
                     </SelectTrigger>
                     <SelectContent>
-                      {managers.map((manager) => (
-                        <SelectItem key={manager.id} value={manager.id}>
-                          {manager.firstName} {manager.lastName} ({manager.employeeCode})
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="NORMAL">Normal</SelectItem>
+                      <SelectItem value="FIELD_EMPLOYEE">Field Employee</SelectItem>
                     </SelectContent>
                   </Select>
                 )}
               />
             </div>
 
-            {isEditing && (
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Controller
-                  name="status"
-                  control={control}
-                  render={({ field }) => (
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select status" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ACTIVE">Active</SelectItem>
-                        <SelectItem value="INACTIVE">Inactive</SelectItem>
-                        <SelectItem value="ON_LEAVE">On Leave</SelectItem>
-                        <SelectItem value="TERMINATED">Terminated</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              </div>
-            )}
+            <div className="space-y-2">
+              <Label htmlFor="reportingTo">Reporting Manager</Label>
+              <Controller
+                name="reportingTo"
+                control={control}
+                render={({ field }) => (
+                  <EmployeeSelect
+                    employees={managers}
+                    value={field.value}
+                    onValueChange={field.onChange}
+                    placeholder="Select reporting manager"
+                    showDepartment={true}
+                    showEmail={false}
+                    allowClear={true}
+                  />
+                )}
+              />
+            </div>
           </div>
+
+          {isEditing && (
+            <div className="space-y-2">
+              <Label htmlFor="status">Status</Label>
+              <Controller
+                name="status"
+                control={control}
+                render={({ field }) => (
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ACTIVE">Active</SelectItem>
+                      <SelectItem value="INACTIVE">Inactive</SelectItem>
+                      <SelectItem value="ON_LEAVE">On Leave</SelectItem>
+                      <SelectItem value="TERMINATED">Terminated</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 

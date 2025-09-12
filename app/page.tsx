@@ -3,6 +3,7 @@
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useEffect } from "react"
+import { Logo } from "@/components/shared/logo"
 
 export default function Home() {
   const { data: session, status } = useSession()
@@ -21,8 +22,10 @@ export default function Home() {
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
-        <h1 className="text-2xl font-bold mb-4">Pekka HR</h1>
-        <p>Loading...</p>
+        <div className="flex justify-center mb-4">
+          <Logo size="xl" />
+        </div>
+        <p className="text-muted-foreground">Loading...</p>
       </div>
     </div>
   )

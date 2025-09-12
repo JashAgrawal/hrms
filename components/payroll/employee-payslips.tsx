@@ -74,17 +74,28 @@ export default function EmployeePayslips({ onViewPayslip }: EmployeePayslipsProp
     }
   }
 
-  const handleDownload = async (period: string, fileName: string) => {
+  const handleDownload = async (payslipId: string, format: 'pdf' | 'html' = 'pdf') => {
     try {
-      setDownloadingId(period)
-      const response = await fetch(`/api/payroll/my-payslips?period=${period}&download=true`)
+      setDownloadingId(payslipId)
+      const response = await fetch(`/api/payroll/payslips/${payslipId}?format=${format}&download=true`)
       
       if (response.ok) {
         const blob = await response.blob()
         const url = window.URL.createObjectURL(blob)
         const a = document.createElement('a')
         a.href = url
-        a.download = fileName
+        
+        // Get filename from response headers or create default
+        const contentDisposition = response.headers.get('content-disposition')
+        let filename = `payslip.${format}`
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename="(.+)"/)
+          if (filenameMatch) {
+            filename = filenameMatch[1]
+          }
+        }
+        
+        a.download = filename
         document.body.appendChild(a)
         a.click()
         window.URL.revokeObjectURL(url)
@@ -257,8 +268,8 @@ export default function EmployeePayslips({ onViewPayslip }: EmployeePayslipsProp
                           )}
                           <Button
                             size="sm"
-                            onClick={() => handleDownload(payslip.payrollRun.period, payslip.fileName)}
-                            disabled={downloadingId === payslip.payrollRun.period}
+                            onClick={() => handleDownload(payslip.id, 'pdf')}
+                            disabled={downloadingId === payslip.id}
                             className="bg-blue-600 hover:bg-blue-700"
                           >
                             {downloadingId === payslip.payrollRun.period ? (

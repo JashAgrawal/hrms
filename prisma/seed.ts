@@ -604,6 +604,340 @@ async function main() {
 
   console.log('✅ Users and employees created')
 
+  // Create expense categories
+  const expenseCategories = await Promise.all([
+    prisma.expenseCategory.upsert({
+      where: { code: 'TRAVEL' },
+      update: {},
+      create: {
+        name: 'Travel',
+        code: 'TRAVEL',
+        description: 'Travel expenses including flights, trains, buses',
+        maxAmount: 50000,
+        requiresReceipt: true,
+        requiresApproval: true,
+        approvalLevels: 1,
+      },
+    }),
+    prisma.expenseCategory.upsert({
+      where: { code: 'PETROL' },
+      update: {},
+      create: {
+        name: 'Petrol/Fuel',
+        code: 'PETROL',
+        description: 'Petrol and fuel expenses for official travel',
+        maxAmount: 10000,
+        requiresReceipt: false, // Auto-generated based on distance
+        requiresApproval: true,
+        approvalLevels: 1,
+      },
+    }),
+    prisma.expenseCategory.upsert({
+      where: { code: 'MEALS' },
+      update: {},
+      create: {
+        name: 'Meals & Entertainment',
+        code: 'MEALS',
+        description: 'Food and entertainment expenses during official travel',
+        maxAmount: 2000,
+        requiresReceipt: true,
+        requiresApproval: true,
+        approvalLevels: 1,
+      },
+    }),
+    prisma.expenseCategory.upsert({
+      where: { code: 'ACCOMMODATION' },
+      update: {},
+      create: {
+        name: 'Accommodation',
+        code: 'ACCOMMODATION',
+        description: 'Hotel and lodging expenses',
+        maxAmount: 15000,
+        requiresReceipt: true,
+        requiresApproval: true,
+        approvalLevels: 2, // Higher approval for accommodation
+      },
+    }),
+    prisma.expenseCategory.upsert({
+      where: { code: 'OFFICE_SUPPLIES' },
+      update: {},
+      create: {
+        name: 'Office Supplies',
+        code: 'OFFICE_SUPPLIES',
+        description: 'Office supplies and stationery',
+        maxAmount: 5000,
+        requiresReceipt: true,
+        requiresApproval: true,
+        approvalLevels: 1,
+      },
+    }),
+    prisma.expenseCategory.upsert({
+      where: { code: 'TRAINING' },
+      update: {},
+      create: {
+        name: 'Training & Development',
+        code: 'TRAINING',
+        description: 'Training courses, certifications, and conferences',
+        maxAmount: 25000,
+        requiresReceipt: true,
+        requiresApproval: true,
+        approvalLevels: 2,
+      },
+    }),
+    prisma.expenseCategory.upsert({
+      where: { code: 'OTHER' },
+      update: {},
+      create: {
+        name: 'Other',
+        code: 'OTHER',
+        description: 'Miscellaneous business expenses',
+        maxAmount: 3000,
+        requiresReceipt: true,
+        requiresApproval: true,
+        approvalLevels: 1,
+      },
+    }),
+  ])
+
+  console.log('✅ Expense categories created')
+
+  // Create expense policy rules
+  const petrolCategory = expenseCategories.find(c => c.code === 'PETROL')!
+  const travelCategory = expenseCategories.find(c => c.code === 'TRAVEL')!
+  const accommodationCategory = expenseCategories.find(c => c.code === 'ACCOMMODATION')!
+
+  await Promise.all([
+    // Petrol expense frequency limit
+    prisma.expensePolicyRule.create({
+      data: {
+        categoryId: petrolCategory.id,
+        name: 'Monthly Frequency Limit',
+        description: 'Maximum 1 petrol expense claim per month',
+        ruleType: 'FREQUENCY_LIMIT',
+        ruleValue: {
+          maxPerMonth: 1,
+          message: 'Only one petrol expense claim allowed per month'
+        },
+      },
+    }),
+    // Travel expense approval requirement
+    prisma.expensePolicyRule.create({
+      data: {
+        categoryId: travelCategory.id,
+        name: 'High Amount Approval',
+        description: 'Expenses above ₹10,000 require additional approval',
+        ruleType: 'APPROVAL_REQUIRED',
+        ruleValue: {
+          minAmount: 10000,
+          levels: 2,
+          message: 'Travel expenses above ₹10,000 require manager and HR approval'
+        },
+      },
+    }),
+    // Accommodation advance booking requirement
+    prisma.expensePolicyRule.create({
+      data: {
+        categoryId: accommodationCategory.id,
+        name: 'Advance Booking Required',
+        description: 'Accommodation must be booked in advance',
+        ruleType: 'APPROVAL_REQUIRED',
+        ruleValue: {
+          minAmount: 0,
+          advanceBookingDays: 3,
+          message: 'Accommodation must be booked at least 3 days in advance'
+        },
+      },
+    }),
+  ])
+
+  console.log('✅ Expense policy rules created')
+
+  // Create petrol expense configuration
+  await prisma.petrolExpenseConfig.create({
+    data: {
+      ratePerKm: 12.50, // ₹12.50 per km
+      currency: 'INR',
+      effectiveFrom: new Date('2024-01-01'),
+      createdBy: adminUser.id,
+    },
+  })
+
+  console.log('✅ Petrol expense configuration created')
+
+  // Add expense permissions
+  const expensePermissions = await Promise.all([
+    prisma.permission.upsert({
+      where: { code: 'EXPENSE_CREATE' },
+      update: {},
+      create: {
+        name: 'Create Expense',
+        code: 'EXPENSE_CREATE',
+        module: 'EXPENSE',
+        action: 'CREATE',
+        resource: 'EXPENSE',
+        description: 'Create expense claims',
+      },
+    }),
+    prisma.permission.upsert({
+      where: { code: 'EXPENSE_READ' },
+      update: {},
+      create: {
+        name: 'View Expense',
+        code: 'EXPENSE_READ',
+        module: 'EXPENSE',
+        action: 'READ',
+        resource: 'EXPENSE',
+        description: 'View expense claims',
+      },
+    }),
+    prisma.permission.upsert({
+      where: { code: 'EXPENSE_UPDATE' },
+      update: {},
+      create: {
+        name: 'Update Expense',
+        code: 'EXPENSE_UPDATE',
+        module: 'EXPENSE',
+        action: 'UPDATE',
+        resource: 'EXPENSE',
+        description: 'Update expense claims',
+      },
+    }),
+    prisma.permission.upsert({
+      where: { code: 'EXPENSE_APPROVE' },
+      update: {},
+      create: {
+        name: 'Approve Expense',
+        code: 'EXPENSE_APPROVE',
+        module: 'EXPENSE',
+        action: 'APPROVE',
+        resource: 'EXPENSE',
+        description: 'Approve expense claims',
+      },
+    }),
+    prisma.permission.upsert({
+      where: { code: 'EXPENSE_REIMBURSE' },
+      update: {},
+      create: {
+        name: 'Process Reimbursement',
+        code: 'EXPENSE_REIMBURSE',
+        module: 'EXPENSE',
+        action: 'APPROVE',
+        resource: 'REIMBURSEMENT',
+        description: 'Process expense reimbursements',
+      },
+    }),
+  ])
+
+  // Assign expense permissions to roles
+  // Admin gets all expense permissions
+  await Promise.all(
+    expensePermissions.map(permission =>
+      prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: adminRole.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: adminRole.id,
+          permissionId: permission.id,
+        },
+      })
+    )
+  )
+
+  // HR role gets expense approval and view permissions
+  const hrExpensePermissions = expensePermissions.filter(p => 
+    ['EXPENSE_READ', 'EXPENSE_APPROVE'].includes(p.code)
+  )
+  await Promise.all(
+    hrExpensePermissions.map(permission =>
+      prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: hrRole.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: hrRole.id,
+          permissionId: permission.id,
+        },
+      })
+    )
+  )
+
+  // Manager role gets expense approval permissions
+  const managerExpensePermissions = expensePermissions.filter(p => 
+    ['EXPENSE_READ', 'EXPENSE_APPROVE'].includes(p.code)
+  )
+  await Promise.all(
+    managerExpensePermissions.map(permission =>
+      prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: managerRole.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: managerRole.id,
+          permissionId: permission.id,
+        },
+      })
+    )
+  )
+
+  // Finance role gets reimbursement permissions
+  const financeExpensePermissions = expensePermissions.filter(p => 
+    ['EXPENSE_READ', 'EXPENSE_REIMBURSE'].includes(p.code)
+  )
+  await Promise.all(
+    financeExpensePermissions.map(permission =>
+      prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: financeRole.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: financeRole.id,
+          permissionId: permission.id,
+        },
+      })
+    )
+  )
+
+  // Employee role gets create and read permissions
+  const empExpensePermissions = expensePermissions.filter(p => 
+    ['EXPENSE_CREATE', 'EXPENSE_READ', 'EXPENSE_UPDATE'].includes(p.code)
+  )
+  await Promise.all(
+    empExpensePermissions.map(permission =>
+      prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: employeeRole.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: employeeRole.id,
+          permissionId: permission.id,
+        },
+      })
+    )
+  )
+
+  console.log('✅ Expense permissions assigned')
+
   // Seed payroll data
   await seedPayrollData()
 

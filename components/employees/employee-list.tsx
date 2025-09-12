@@ -100,10 +100,10 @@ export function EmployeeList({ searchParams }: EmployeeListProps) {
 
   const page = Number(searchParams.page) || 1
   const limit = Number(searchParams.limit) || 10
-  const search = searchParams.search as string || ''
-  const department = searchParams.department as string || ''
-  const status = searchParams.status as string || ''
-  const employmentType = searchParams.employmentType as string || ''
+  const search = (searchParams.search as string) || ''
+  const department = (searchParams.department as string) || ''
+  const status = (searchParams.status as string) || ''
+  const employmentType = (searchParams.employmentType as string) || ''
 
   useEffect(() => {
     fetchEmployees()
@@ -156,7 +156,6 @@ export function EmployeeList({ searchParams }: EmployeeListProps) {
   }
 
   const isAllSelected = data ? selectedEmployees.length === data.employees.length && data.employees.length > 0 : false
-  const isIndeterminate = selectedEmployees.length > 0 && selectedEmployees.length < (data?.employees.length || 0)
 
   if (loading) {
     return (

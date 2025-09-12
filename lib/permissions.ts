@@ -332,3 +332,8 @@ export async function getUserPermissions(userId: string): Promise<Permission[]> 
     return []
   }
 }
+
+/**
+ * Alias for hasPermission for backward compatibility
+ */
+export const checkPermission = hasPermission

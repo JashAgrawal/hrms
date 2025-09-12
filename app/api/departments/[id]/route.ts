@@ -5,7 +5,7 @@ import { prisma } from '@/lib/prisma'
 // PUT /api/departments/[id] - Update a department
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth()
@@ -25,9 +25,11 @@ export async function PUT(
       return NextResponse.json({ error: 'Department name is required' }, { status: 400 })
     }
 
+    const { id } = await params
+
     // Check if department exists
     const existingDepartment = await prisma.department.findUnique({
-      where: { id: params.id }
+      where: { id }
     })
 
     if (!existingDepartment) {
@@ -42,7 +44,7 @@ export async function PUT(
           mode: 'insensitive'
         },
         id: {
-          not: params.id
+          not: id
         }
       }
     })
@@ -55,7 +57,7 @@ export async function PUT(
     const code = name.toUpperCase().replace(/\s+/g, '_').substring(0, 10)
 
     const department = await prisma.department.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         name,
         code,
@@ -83,7 +85,7 @@ export async function PUT(
 // DELETE /api/departments/[id] - Delete a department
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await auth()
@@ -96,9 +98,11 @@ export async function DELETE(
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
     }
 
+    const { id } = await params
+
     // Check if department exists
     const existingDepartment = await prisma.department.findUnique({
-      where: { id: params.id },
+      where: { id },
       include: {
         _count: {
           select: {
@@ -125,7 +129,7 @@ export async function DELETE(
 
     // Soft delete by setting isActive to false
     await prisma.department.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         isActive: false,
       }

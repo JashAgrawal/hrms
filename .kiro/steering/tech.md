@@ -112,3 +112,10 @@ npm run db:studio
 - Implement proper relations and constraints
 - Use transactions for complex operations
 - Follow audit logging patterns
+
+### Ruless
+- Dont write tests
+
+### Avoid These Common errors
+- We Are using Next Auth v5 so generate code accordingly
+- Also use params and searchparams as used in next js 15 we are using next js 15

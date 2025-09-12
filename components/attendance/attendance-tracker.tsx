@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Clock, MapPin, Timer, AlertCircle, Smartphone, Monitor } from 'lucide-react'
 import { toast } from 'sonner'
 import { GPSAttendanceTracker } from './gps-attendance-tracker'
+import { DailyDistanceDisplay } from './daily-distance-display'
 
 interface AttendanceStatus {
   hasCheckedIn: boolean
@@ -252,7 +253,14 @@ export function AttendanceTracker() {
 
         <TabsContent value="gps" className="space-y-6 mt-6">
           {/* GPS-based attendance content */}
-          <GPSAttendanceTracker />
+          <div className="grid gap-4 md:grid-cols-3">
+            <div className="md:col-span-2">
+              <GPSAttendanceTracker />
+            </div>
+            <div>
+              <DailyDistanceDisplay />
+            </div>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

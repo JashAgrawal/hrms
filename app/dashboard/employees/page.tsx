@@ -1,50 +1,48 @@
 import { Suspense } from 'react'
-import { auth } from '@/lib/auth'
-import { redirect } from 'next/navigation'
 import { EmployeeList } from '@/components/employees/employee-list'
 import { EmployeeAdvancedSearch } from '@/components/employees/employee-advanced-search'
+import { EmployeeImportDialog } from '@/components/employees/employee-import-dialog'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Plus, Users, UserCheck, UserX, Clock } from 'lucide-react'
 import Link from 'next/link'
-import { prisma } from '@/lib/prisma'
+import { auth } from '@/lib/auth'
+import { redirect } from 'next/navigation'
+import { ExportAllButton } from '@/components/employees/export-all-button'
 
 async function getEmployeeStats() {
-  const [total, active, inactive, onLeave] = await Promise.all([
-    prisma.employee.count(),
-    prisma.employee.count({ where: { status: 'ACTIVE' } }),
-    prisma.employee.count({ where: { status: 'INACTIVE' } }),
-    prisma.employee.count({ where: { status: 'ON_LEAVE' } }),
-  ])
-
-  return { total, active, inactive, onLeave }
+  try {
+    const response = await fetch(`${process.env.NEXTAUTH_URL}/api/employees/stats`, {
+      cache: 'no-store'
+    })
+    if (response.ok) {
+      return await response.json()
+    }
+  } catch (error) {
+    console.error('Error fetching employee stats:', error)
+  }
+  return { total: 0, active: 0, onLeave: 0, inactive: 0 }
 }
 
 async function getDepartments() {
-  return await prisma.department.findMany({
-    where: { isActive: true },
-    select: {
-      id: true,
-      name: true,
-      code: true,
-      _count: {
-        select: {
-          employees: {
-            where: {
-              status: 'ACTIVE'
-            }
-          }
-        }
-      }
-    },
-    orderBy: { name: 'asc' }
-  })
+  try {
+    const response = await fetch(`${process.env.NEXTAUTH_URL}/api/departments`, {
+      cache: 'no-store'
+    })
+    if (response.ok) {
+      const data = await response.json()
+      return Array.isArray(data.departments) ? data.departments : []
+    }
+  } catch (error) {
+    console.error('Error fetching departments:', error)
+  }
+  return []
 }
 
 export default async function EmployeesPage({
   searchParams,
 }: {
-  searchParams: { [key: string]: string | string[] | undefined }
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const session = await auth()
   
@@ -52,21 +50,19 @@ export default async function EmployeesPage({
     redirect('/auth/signin')
   }
 
-  // Check if user has permission to view employees
-  const currentUser = await prisma.user.findUnique({
-    where: { id: session.user.id },
-    include: { employee: true }
-  })
-
-  if (!currentUser || !['ADMIN', 'HR', 'MANAGER'].includes(currentUser.role)) {
+  // Check user permissions
+  if (!session.user.role || !['ADMIN', 'HR', 'MANAGER'].includes(session.user.role)) {
     redirect('/dashboard')
   }
 
-  const [stats, departments] = await Promise.all([
+  const canCreateEmployee = ['ADMIN', 'HR'].includes(session.user.role)
+  
+  // Fetch data in parallel
+  const [stats, departments, params] = await Promise.all([
     getEmployeeStats(),
-    getDepartments()
+    getDepartments(),
+    searchParams
   ])
-  const canCreateEmployee = ['ADMIN', 'HR'].includes(currentUser.role)
 
   return (
     <div className="space-y-6">
@@ -86,12 +82,16 @@ export default async function EmployeesPage({
             </Button>
           </Link>
           {canCreateEmployee && (
-            <Link href="/dashboard/employees/new">
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Employee
-              </Button>
-            </Link>
+            <>
+              <EmployeeImportDialog />
+              <ExportAllButton />
+              <Link href="/dashboard/employees/new">
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Add Employee
+                </Button>
+              </Link>
+            </>
           )}
         </div>
       </div>
@@ -151,22 +151,26 @@ export default async function EmployeesPage({
         </Card>
       </div>
 
-      {/* Advanced Search */}
-      <Suspense fallback={<div>Loading search...</div>}>
-        <EmployeeAdvancedSearch departments={departments} />
-      </Suspense>
-
-      {/* Employee List */}
+      {/* Employee Directory with Integrated Search */}
       <Card>
         <CardHeader>
-          <CardTitle>Employee Directory</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            Employee Directory
+          </CardTitle>
           <CardDescription>
-            Browse and manage employee profiles
+            Search, filter, and manage employee profiles
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
+          {/* Integrated Search Component */}
+          <Suspense fallback={<div>Loading search...</div>}>
+            <EmployeeAdvancedSearch departments={departments} />
+          </Suspense>
+          
+          {/* Employee List */}
           <Suspense fallback={<div>Loading employees...</div>}>
-            <EmployeeList searchParams={searchParams} />
+            <EmployeeList searchParams={params} />
           </Suspense>
         </CardContent>
       </Card>

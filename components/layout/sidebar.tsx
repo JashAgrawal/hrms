@@ -3,21 +3,23 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { 
-  Users, 
-  Clock, 
-  Calendar, 
-  DollarSign, 
-  Receipt, 
-  Target, 
-  FileText, 
+import {
+  Users,
+  Clock,
+  Calendar,
+  DollarSign,
+  Receipt,
+  Target,
+  FileText,
   Settings,
   Home,
   ChevronDown,
   Building2,
   UserCheck,
-  Briefcase
+  Briefcase,
+  Megaphone
 } from "lucide-react"
+import { Logo } from "@/components/shared/logo"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
@@ -77,6 +79,17 @@ const navigationItems: NavItem[] = [
         href: "/dashboard/attendance/reports",
         icon: FileText,
         roles: ["ADMIN", "HR", "MANAGER"],
+      },
+      {
+        title: "Attendance Requests",
+        href: "/dashboard/attendance/requests",
+        icon: FileText,
+        roles: ["ADMIN", "HR", "MANAGER"],
+      },
+      {
+        title: "Timesheets",
+        href: "/dashboard/timesheets",
+        icon: FileText,
       },
     ],
   },
@@ -189,6 +202,23 @@ const navigationItems: NavItem[] = [
     ],
   },
   {
+    title: "Announcements",
+    href: "/dashboard/announcements",
+    icon: Megaphone,
+  },
+  {
+    title: "Locations",
+    href: "/dashboard/locations",
+    icon: Building2,
+    roles: ["ADMIN", "HR"],
+  },
+  {
+    title: "Audit Logs",
+    href: "/dashboard/audit-logs",
+    icon: FileText,
+    roles: ["ADMIN"],
+  },
+  {
     title: "Settings",
     href: "/dashboard/settings",
     icon: Settings,
@@ -275,12 +305,7 @@ export function Sidebar({ userRole = "EMPLOYEE", className }: SidebarProps) {
     <div className={cn("flex h-full w-64 flex-col border-r bg-sidebar", className)}>
       {/* Logo */}
       <div className="flex h-16 items-center border-b px-6">
-        <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Building2 className="h-4 w-4" />
-          </div>
-          <span className="text-lg">Pekka HR</span>
-        </Link>
+        <Logo href="/dashboard" size="md" />
       </div>
 
       {/* Navigation */}

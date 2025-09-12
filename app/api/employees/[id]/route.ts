@@ -20,6 +20,7 @@ const updateEmployeeSchema = z.object({
   designation: z.string().min(1, 'Designation is required').optional(),
   departmentId: z.string().min(1, 'Department is required').optional(),
   employmentType: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN']).optional(),
+  employeeType: z.enum(['NORMAL', 'FIELD_EMPLOYEE']).optional(),
   reportingTo: z.string().optional(),
   basicSalary: z.number().positive().optional(),
   ctc: z.number().positive().optional(),

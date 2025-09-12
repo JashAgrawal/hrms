@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
 import { AlertCircle, Mail, Lock } from "lucide-react"
+import { Logo } from "@/components/shared/logo"
 
 interface Provider {
   id: string
@@ -100,6 +101,9 @@ function SignInForm() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
+          <div className="flex justify-center mb-4">
+            <Logo size="lg" showText={false} />
+          </div>
           <CardTitle className="text-2xl font-bold">Welcome to Pekka HR</CardTitle>
           <CardDescription>
             Sign in to access your account

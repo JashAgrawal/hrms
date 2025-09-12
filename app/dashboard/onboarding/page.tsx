@@ -53,18 +53,6 @@ export default function OnboardingPage() {
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [isLoading, setIsLoading] = useState(true);
 
-  if (status === "loading") {
-    return <div>Loading...</div>;
-  }
-
-  if (!session?.user) {
-    redirect("/auth/signin");
-  }
-
-  if (!["ADMIN", "HR"].includes(session.user.role)) {
-    redirect("/dashboard");
-  }
-
   useEffect(() => {
     fetchOnboardingData();
   }, []);
@@ -90,92 +78,49 @@ export default function OnboardingPage() {
     setFilteredEmployees(filtered);
   }, [employees, searchTerm, statusFilter]);
 
+  if (status === "loading") {
+    return <div>Loading...</div>;
+  }
+
+  if (!session?.user) {
+    redirect("/auth/signin");
+  }
+
+  if (!["ADMIN", "HR"].includes(session.user.role)) {
+    redirect("/dashboard");
+  }
+
   const fetchOnboardingData = async () => {
     try {
       setIsLoading(true);
-      // Mock data for now - replace with actual API call
-      const mockData: OnboardingEmployee[] = [
-        {
-          id: "1",
-          firstName: "John",
-          lastName: "Doe",
-          email: "john.doe@company.com",
-          employeeCode: "EMP001",
-          department: { name: "Engineering" },
-          startDate: "2024-01-15",
-          status: "IN_PROGRESS",
-          tasks: [
-            {
-              id: "1",
-              title: "Complete profile setup",
-              description: "Fill in personal details",
-              status: "COMPLETED",
-              dueDate: "2024-01-16",
-            },
-            {
-              id: "2",
-              title: "IT equipment setup",
-              description: "Receive laptop and access cards",
-              status: "COMPLETED",
-              dueDate: "2024-01-17",
-            },
-            {
-              id: "3",
-              title: "HR orientation",
-              description: "Attend HR orientation session",
-              status: "IN_PROGRESS",
-              dueDate: "2024-01-18",
-            },
-            {
-              id: "4",
-              title: "Team introduction",
-              description: "Meet with team members",
-              status: "PENDING",
-              dueDate: "2024-01-19",
-            },
-          ],
-          completedTasks: 2,
-          totalTasks: 4,
-          progress: 50,
-        },
-        {
-          id: "2",
-          firstName: "Jane",
-          lastName: "Smith",
-          email: "jane.smith@company.com",
-          employeeCode: "EMP002",
-          department: { name: "Marketing" },
-          startDate: "2024-01-20",
-          status: "PENDING",
-          tasks: [
-            {
-              id: "5",
-              title: "Complete profile setup",
-              description: "Fill in personal details",
-              status: "PENDING",
-              dueDate: "2024-01-21",
-            },
-            {
-              id: "6",
-              title: "IT equipment setup",
-              description: "Receive laptop and access cards",
-              status: "PENDING",
-              dueDate: "2024-01-22",
-            },
-            {
-              id: "7",
-              title: "HR orientation",
-              description: "Attend HR orientation session",
-              status: "PENDING",
-              dueDate: "2024-01-23",
-            },
-          ],
-          completedTasks: 0,
-          totalTasks: 3,
-          progress: 0,
-        },
-      ];
-      setEmployees(mockData);
+      const res = await fetch('/api/onboarding/workflows')
+      if (!res.ok) throw new Error('Failed to fetch onboarding workflows')
+      const data = await res.json()
+      const mapped: OnboardingEmployee[] = (data.workflows || []).map((wf: any) => {
+        const tasks = (wf.tasks || []).map((wt: any) => ({
+          id: wt.id,
+          title: wt.task?.title || wt.task?.name || 'Task',
+          description: wt.task?.description || '',
+          status: wt.status,
+          dueDate: wt.dueDate ? new Date(wt.dueDate).toISOString() : undefined,
+        }))
+        const completed = tasks.filter((t: any) => t.status === 'COMPLETED').length
+        return {
+          id: wf.employee.id,
+          firstName: wf.employee.firstName,
+          lastName: wf.employee.lastName,
+          email: wf.employee.email,
+          employeeCode: wf.employee.employeeCode,
+          department: { name: wf.employee.department?.name || '-' },
+          startDate: wf.employee.dateOfJoining || wf.employee.startDate || new Date().toISOString(),
+          status: wf.status,
+          tasks,
+          completedTasks: completed,
+          totalTasks: tasks.length,
+          progress: tasks.length ? Math.round((completed / tasks.length) * 100) : 0,
+        } as OnboardingEmployee
+      })
+      setEmployees(mapped)
     } catch (error) {
       console.error("Error fetching onboarding data:", error);
     } finally {

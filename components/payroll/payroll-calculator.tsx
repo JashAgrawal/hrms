@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -18,6 +18,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Progress } from '@/components/ui/progress'
 import { 
   Loader2, 
   Calculator, 
@@ -27,7 +29,13 @@ import {
   TrendingDown,
   Clock,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  Download,
+  Play,
+  Pause,
+  RotateCcw,
+  FileText,
+  BarChart3
 } from 'lucide-react'
 
 const payrollCalculationSchema = z.object({

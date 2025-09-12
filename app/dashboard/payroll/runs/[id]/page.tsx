@@ -543,9 +543,9 @@ export default function PayrollRunDetailsPage() {
         </TabsContent>
 
         <TabsContent value="payslips" className="space-y-6">
-          <BulkPayslipManager 
-            payrollRun={payrollRun} 
-            onRefresh={fetchPayrollRun}
+          <BulkPayslipManager
+            payrollRunId={payrollRun.id}
+            payrollRunPeriod={payrollRun.period}
           />
         </TabsContent>
       </Tabs>

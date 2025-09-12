@@ -57,6 +57,7 @@ model User {
   employee Employee?
   customRole Role?   @relation("UserCustomRole", fields: [roleId], references: [id])
   auditLogs AuditLog[]
+  approvedTimesheets Timesheet[] @relation("TimesheetApprover")
 
   @@map("users")
 }
@@ -118,13 +119,18 @@ model RolePermission {
 model AuditLog {
   id          String   @id @default(cuid())
   userId      String?
+  userName    String?  // Store username for historical reference
   action      String   // LOGIN, LOGOUT, CREATE, UPDATE, DELETE, etc.
   resource    String   // TABLE_NAME or RESOURCE_TYPE
   resourceId  String?  // ID of the affected resource
+  details     Json?    // Additional context and details
   oldValues   Json?    // Previous values for updates
   newValues   Json?    // New values for creates/updates
   ipAddress   String?
   userAgent   String?
+  sessionId   String?  // Session identifier
+  success     Boolean  @default(true) // Whether the action was successful
+  errorMessage String? // Error message if action failed
   timestamp   DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -133,6 +139,7 @@ model AuditLog {
   @@index([action])
   @@index([resource])
   @@index([timestamp])
+  @@index([success])
   @@map("audit_logs")
 }
 
@@ -154,6 +161,7 @@ model Employee {
   departmentId    String
   joiningDate     DateTime
   employmentType  EmploymentType @default(FULL_TIME)
+  employeeType    EmployeeType   @default(NORMAL)
   status          EmployeeStatus @default(ACTIVE)
   reportingTo     String?
   
@@ -167,6 +175,12 @@ model Employee {
   aadharNumber    String?        @unique
   pfNumber        String?        @unique
   esiNumber       String?        @unique
+  
+  // Banking Information
+  bankAccountNumber String?
+  bankIFSC         String?
+  bankName         String?
+  bankBranch       String?
   
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -194,6 +208,30 @@ model Employee {
   salaryStructures   EmployeeSalaryStructure[]
   salaryRevisions    SalaryRevision[]
   payslips           Payslip[]
+  
+  // Timesheet Relations
+  timesheets         Timesheet[]
+  
+  // Site Relations (for Field Employees)
+  siteVisits         SiteVisit[]
+  employeeSites      EmployeeSite[]
+  
+  // Announcement Relations
+  announcementViews  AnnouncementView[]
+  
+  // Distance Tracking Relations
+  distanceTrackingPoints DistanceTrackingPoint[]
+  dailyDistanceRecords   DailyDistanceRecord[]
+  distanceAnomalies      DistanceAnomaly[]
+  
+  // Travel and Expense Relations
+  travelRequests         TravelRequest[]
+  monthlyPetrolExpenses  MonthlyPetrolExpense[]
+  
+  // Performance Management Relations
+  objectives             Objective[]
+  feedbacksGiven         Feedback[]              @relation("FeedbackReviewer")
+  feedbacksReceived      Feedback[]              @relation("FeedbackEmployee")
 
   @@index([departmentId])
   @@index([status])
@@ -295,22 +333,134 @@ model Location {
   @@map("locations")
 }
 
-// Employee Location Assignment for geo-fencing
-model EmployeeLocation {
+// Office Location Management for predefined locations
+model OfficeLocation {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  code        String   @unique
+  address     String
+  city        String
+  state       String
+  country     String   @default("India")
+  latitude    Decimal  @db.Decimal(10, 8)
+  longitude   Decimal  @db.Decimal(11, 8)
+  radius      Int      @default(100) // Default radius in meters
+  timezone    String   @default("Asia/Kolkata")
+  workingHours Json?   // Working hours configuration
+  isHeadOffice Boolean @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  employeeLocations EmployeeLocation[]
+
+  @@index([city, state])
+  @@index([latitude, longitude])
+  @@map("office_locations")
+}
+
+// Site Master Data for Field Employees
+model Site {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  code        String   @unique
+  address     String
+  city        String
+  state       String
+  country     String   @default("India")
+  latitude    Decimal  @db.Decimal(10, 8)
+  longitude   Decimal  @db.Decimal(11, 8)
+  radius      Int      @default(50) // Radius in meters for check-in validation
+  contactPerson String?
+  contactPhone  String?
+  contactEmail  String?
+  description   String?
+  siteType      SiteType @default(CLIENT)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  siteVisits    SiteVisit[]
+  employeeSites EmployeeSite[]
+
+  @@index([city, state])
+  @@index([latitude, longitude])
+  @@index([siteType])
+  @@map("sites")
+}
+
+// Employee Site Assignment for Field Employees
+model EmployeeSite {
   id         String   @id @default(cuid())
   employeeId String
-  locationId String
-  isActive   Boolean  @default(true)
-  assignedBy String   // User ID who assigned this location
+  siteId     String
+  assignedBy String   // User ID who assigned this site
   assignedAt DateTime @default(now())
+  isActive   Boolean  @default(true)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  location Location @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  site     Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
-  @@unique([employeeId, locationId])
+  @@unique([employeeId, siteId])
   @@index([employeeId])
+  @@index([siteId])
+  @@map("employee_sites")
+}
+
+// Site Visit Tracking for Field Employees
+model SiteVisit {
+  id               String           @id @default(cuid())
+  employeeId       String
+  siteId           String
+  date             DateTime         @db.Date
+  checkInTime      DateTime
+  checkOutTime     DateTime?
+  checkInLocation  Json             // GPS coordinates at check-in
+  checkOutLocation Json?            // GPS coordinates at check-out
+  purpose          String?          // Purpose of visit
+  notes            String?          // Visit notes
+  photos           Json?            // Array of photo URLs
+  status           SiteVisitStatus  @default(IN_PROGRESS)
+  distanceFromSite Decimal?         @db.Decimal(8, 2) // Distance in meters
+  duration         Int?             // Duration in minutes
+  isValidLocation  Boolean          @default(true)    // Whether check-in was within site radius
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  site     Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, date])
+  @@index([siteId, date])
+  @@index([status])
+  @@map("site_visits")
+}
+
+// Employee Location Assignment for geo-fencing
+model EmployeeLocation {
+  id               String   @id @default(cuid())
+  employeeId       String
+  name             String   // Custom name for this location
+  latitude         Decimal  @db.Decimal(10, 8)
+  longitude        Decimal  @db.Decimal(11, 8)
+  radius           Int      @default(100) // Radius in meters
+  isOfficeLocation Boolean  @default(false)
+  officeLocationId String?  // Reference to predefined office location
+  locationId       String?  // Reference to custom location (for backward compatibility)
+  isActive         Boolean  @default(true)
+  assignedBy       String   // User ID who assigned this location
+  assignedAt       DateTime @default(now())
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  employee       Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  officeLocation OfficeLocation? @relation(fields: [officeLocationId], references: [id])
+  location       Location?      @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId])
+  @@index([officeLocationId])
   @@map("employee_locations")
 }
 
@@ -354,6 +504,77 @@ model AttendancePolicy {
   updatedAt             DateTime @updatedAt
 
   @@map("attendance_policies")
+}
+
+// Timesheet Management System
+model Project {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  code        String   @unique
+  description String?
+  clientName  String?
+  startDate   DateTime @db.Date
+  endDate     DateTime? @db.Date
+  status      ProjectStatus @default(ACTIVE)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  timeEntries TimeEntry[]
+
+  @@index([status])
+  @@map("projects")
+}
+
+model Timesheet {
+  id         String          @id @default(cuid())
+  employeeId String
+  startDate  DateTime        @db.Date
+  endDate    DateTime        @db.Date
+  status     TimesheetStatus @default(DRAFT)
+  totalHours Decimal         @db.Decimal(6, 2) @default(0)
+  approvedBy String?
+  approvedAt DateTime?
+  rejectedAt DateTime?
+  rejectionReason String?
+  submittedAt DateTime?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  employee Employee   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  approver User?      @relation("TimesheetApprover", fields: [approvedBy], references: [id])
+  entries  TimeEntry[]
+
+  @@unique([employeeId, startDate, endDate])
+  @@index([employeeId, status])
+  @@index([startDate, endDate])
+  @@map("timesheets")
+}
+
+model TimeEntry {
+  id            String   @id @default(cuid())
+  timesheetId   String
+  employeeId    String
+  date          DateTime @db.Date
+  startTime     String   // HH:MM format
+  endTime       String   // HH:MM format
+  breakDuration Int      @default(0) // Break duration in minutes
+  projectId     String?
+  taskDescription String?
+  billableHours Decimal  @db.Decimal(4, 2)
+  nonBillableHours Decimal @db.Decimal(4, 2) @default(0)
+  overtimeHours Decimal  @db.Decimal(4, 2) @default(0)
+  isApproved    Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  timesheet Timesheet @relation(fields: [timesheetId], references: [id], onDelete: Cascade)
+  project   Project?  @relation(fields: [projectId], references: [id])
+
+  @@unique([timesheetId, date])
+  @@index([employeeId, date])
+  @@index([projectId])
+  @@map("time_entries")
 }
 
 // Leave Management
@@ -448,11 +669,14 @@ model LeaveApproval {
   leaveRequestId  String
   approverId      String
   approverName    String?        // Store approver name for historical reference
+  approverEmail   String?        // Store approver email for historical reference
   level           Int            // Approval level (1, 2, 3, etc.)
   status          ApprovalStatus @default(PENDING)
   approvedAt      DateTime?
   rejectedAt      DateTime?
   comments        String?
+  notificationSent Boolean       @default(false)
+  notificationSentAt DateTime?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
@@ -702,30 +926,255 @@ model Payslip {
 }
 
 // Expense and Travel Management
-model ExpenseClaim {
-  id          String            @id @default(cuid())
-  employeeId  String
-  title       String
+
+// Expense Categories Configuration
+model ExpenseCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  code        String   @unique
   description String?
-  category    ExpenseCategory
-  amount      Decimal
-  currency    String            @default("INR")
-  expenseDate DateTime          @db.Date
-  location    Json?             // GPS coordinates
-  receipts    Json?             // Array of receipt file URLs
-  status      ExpenseStatus     @default(PENDING)
-  submittedAt DateTime          @default(now())
-  approvedAt  DateTime?
-  approvedBy  String?
-  rejectedAt  DateTime?
+  maxAmount   Decimal? @db.Decimal(12, 2) // Maximum allowed amount per claim
+  requiresReceipt Boolean @default(true)
+  requiresApproval Boolean @default(true)
+  approvalLevels Int    @default(1)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  expenseClaims ExpenseClaim[]
+  policyRules   ExpensePolicyRule[]
+
+  @@map("expense_categories")
+}
+
+// Expense Policy Rules
+model ExpensePolicyRule {
+  id          String   @id @default(cuid())
+  categoryId  String
+  name        String
+  description String?
+  ruleType    PolicyRuleType // AMOUNT_LIMIT, FREQUENCY_LIMIT, APPROVAL_REQUIRED
+  ruleValue   Json     // Flexible rule configuration
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@map("expense_policy_rules")
+}
+
+// Enhanced Expense Claims
+model ExpenseClaim {
+  id              String            @id @default(cuid())
+  employeeId      String
+  categoryId      String
+  title           String
+  description     String?
+  amount          Decimal           @db.Decimal(12, 2)
+  currency        String            @default("INR")
+  expenseDate     DateTime          @db.Date
+  location        Json?             // GPS coordinates where expense occurred
+  merchantName    String?           // Vendor/merchant name
+  merchantAddress String?           // Vendor address
+  billNumber      String?           // Bill/invoice number
+  taxAmount       Decimal?          @db.Decimal(10, 2)
+  taxRate         Decimal?          @db.Decimal(5, 2)
+  isReimbursable  Boolean           @default(true)
+  isPetrolExpense Boolean           @default(false) // Auto-generated petrol expenses
+  distanceTraveled Decimal?         @db.Decimal(8, 2) // For fuel/travel expenses
+  vehicleNumber   String?           // Vehicle used for travel
+  status          ExpenseStatus     @default(PENDING)
+  submittedAt     DateTime          @default(now())
+  approvedAt      DateTime?
+  approvedBy      String?
+  rejectedAt      DateTime?
   rejectionReason String?
-  reimbursedAt DateTime?
-  createdAt   DateTime          @default(now())
-  updatedAt   DateTime          @updatedAt
+  reimbursedAt    DateTime?
+  reimbursedBy    String?
+  reimbursementAmount Decimal?      @db.Decimal(12, 2)
+  reimbursementBatchId String?      // Reference to reimbursement batch
+  policyViolations Json?            // Array of policy violations
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee    Employee              @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  category    ExpenseCategory       @relation(fields: [categoryId], references: [id])
+  attachments ExpenseAttachment[]
+  approvals   ExpenseApproval[]
+  travelRequest TravelRequest?      @relation(fields: [travelRequestId], references: [id])
+  travelRequestId String?
+  monthlyPetrolExpense MonthlyPetrolExpense?
+  reimbursementBatch ReimbursementBatch? @relation(fields: [reimbursementBatchId], references: [id])
 
+  @@index([employeeId, status])
+  @@index([expenseDate])
+  @@index([categoryId])
   @@map("expense_claims")
+}
+
+// Expense Attachments/Receipts
+model ExpenseAttachment {
+  id            String   @id @default(cuid())
+  expenseId     String
+  fileName      String
+  originalName  String
+  fileSize      Int
+  mimeType      String
+  fileUrl       String
+  thumbnailUrl  String?
+  uploadedAt    DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  expense ExpenseClaim @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@map("expense_attachments")
+}
+
+// Expense Approval Workflow
+model ExpenseApproval {
+  id              String         @id @default(cuid())
+  expenseId       String
+  approverId      String
+  approverName    String?
+  approverEmail   String?
+  level           Int            // Approval level (1, 2, 3, etc.)
+  status          ApprovalStatus @default(PENDING)
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  comments        String?
+  notificationSent Boolean       @default(false)
+  notificationSentAt DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  expense ExpenseClaim @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+
+  @@unique([expenseId, level])
+  @@index([approverId, status])
+  @@map("expense_approvals")
+}
+
+// Reimbursement Batch Processing
+model ReimbursementBatch {
+  id              String            @id @default(cuid())
+  batchId         String            @unique
+  totalAmount     Decimal           @db.Decimal(15, 2)
+  totalClaims     Int
+  paymentMethod   PaymentMethod     @default(BANK_TRANSFER)
+  referenceNumber String?           // Bank reference or cheque number
+  notes           String?
+  status          ReimbursementStatus @default(PROCESSING)
+  processedBy     String
+  processedAt     DateTime
+  completedAt     DateTime?
+  failedAt        DateTime?
+  failureReason   String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  expenseClaims   ExpenseClaim[]
+
+  @@index([status])
+  @@index([processedAt])
+  @@map("reimbursement_batches")
+}
+
+// Travel Requests
+model TravelRequest {
+  id              String            @id @default(cuid())
+  employeeId      String
+  title           String
+  purpose         String
+  destination     String
+  fromLocation    String
+  startDate       DateTime          @db.Date
+  endDate         DateTime          @db.Date
+  estimatedCost   Decimal           @db.Decimal(12, 2)
+  actualCost      Decimal?          @db.Decimal(12, 2)
+  travelMode      TravelMode        @default(FLIGHT)
+  accommodationRequired Boolean     @default(false)
+  advanceRequired Boolean           @default(false)
+  advanceAmount   Decimal?          @db.Decimal(12, 2)
+  status          TravelRequestStatus @default(PENDING)
+  itinerary       Json?             // Detailed travel itinerary
+  approvedAt      DateTime?
+  approvedBy      String?
+  rejectedAt      DateTime?
+  rejectionReason String?
+  completedAt     DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  employee      Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  expenseClaims ExpenseClaim[]
+  approvals     TravelApproval[]
+
+  @@index([employeeId, status])
+  @@index([startDate, endDate])
+  @@map("travel_requests")
+}
+
+// Travel Approval Workflow
+model TravelApproval {
+  id              String         @id @default(cuid())
+  travelRequestId String
+  approverId      String
+  approverName    String?
+  approverEmail   String?
+  level           Int            // Approval level (1, 2, 3, etc.)
+  status          ApprovalStatus @default(PENDING)
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  comments        String?
+  notificationSent Boolean       @default(false)
+  notificationSentAt DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  travelRequest TravelRequest @relation(fields: [travelRequestId], references: [id], onDelete: Cascade)
+
+  @@unique([travelRequestId, level])
+  @@index([approverId, status])
+  @@map("travel_approvals")
+}
+
+// Petrol Expense Configuration
+model PetrolExpenseConfig {
+  id          String   @id @default(cuid())
+  ratePerKm   Decimal  @db.Decimal(6, 2) // Rate per kilometer
+  currency    String   @default("INR")
+  effectiveFrom DateTime @default(now())
+  effectiveTo   DateTime?
+  isActive    Boolean  @default(true)
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("petrol_expense_config")
+}
+
+// Monthly Petrol Expense Summary
+model MonthlyPetrolExpense {
+  id              String   @id @default(cuid())
+  employeeId      String
+  month           Int      // 1-12
+  year            Int
+  totalDistance   Decimal  @db.Decimal(10, 2) // Total distance in km
+  totalAmount     Decimal  @db.Decimal(12, 2) // Total petrol expense
+  ratePerKm       Decimal  @db.Decimal(6, 2)  // Rate used for calculation
+  status          ExpenseStatus @default(PENDING)
+  autoGenerated   Boolean  @default(true)
+  expenseClaimId  String?  @unique // Reference to auto-generated expense claim
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  employee     Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  expenseClaim ExpenseClaim? @relation(fields: [expenseClaimId], references: [id])
+
+  @@unique([employeeId, month, year])
+  @@index([employeeId, year])
+  @@map("monthly_petrol_expenses")
 }
 
 // Performance Management
@@ -733,43 +1182,398 @@ model PerformanceReview {
   id           String           @id @default(cuid())
   employeeId   String
   reviewerId   String
+  cycleId      String?          // Reference to review cycle
   period       String           // YYYY-QX or YYYY format
   type         ReviewType       @default(ANNUAL)
   status       ReviewStatus     @default(DRAFT)
   selfRating   Json?            // Self assessment scores
   managerRating Json?           // Manager assessment scores
+  peerRating   Json?            // Peer assessment scores (360 feedback)
+  subordinateRating Json?       // Subordinate assessment scores (360 feedback)
   goals        Json?            // OKRs and goals
-  feedback     String?
-  overallRating Decimal?
+  achievements Json?            // Key achievements during the period
+  developmentAreas Json?        // Areas for improvement
+  feedback     String?          // Overall feedback comments
+  overallRating Decimal?        @db.Decimal(3, 2) // Overall rating (1.00 to 5.00)
+  calibrationRating Decimal?    @db.Decimal(3, 2) // Post-calibration rating
+  isCalibrated Boolean          @default(false)
+  calibratedBy String?
+  calibratedAt DateTime?
+  submittedAt  DateTime?
+  completedAt  DateTime?
+  dueDate      DateTime?
   createdAt    DateTime         @default(now())
   updatedAt    DateTime         @updatedAt
 
-  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  employee     Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  cycle        PerformanceCycle? @relation(fields: [cycleId], references: [id])
+  objectives   Objective[]
+  feedbacks    Feedback[]
 
+  @@index([employeeId, period])
+  @@index([cycleId])
+  @@index([status])
   @@map("performance_reviews")
 }
 
-// Document Management
-model Document {
-  id          String         @id @default(cuid())
-  employeeId  String?
-  title       String
+// Performance Review Cycles
+model PerformanceCycle {
+  id          String           @id @default(cuid())
+  name        String           @unique // e.g., "Q1 2024 Review", "Annual Review 2024"
   description String?
-  category    DocumentCategory
-  fileName    String
-  fileUrl     String
-  fileSize    Int?
-  mimeType    String?
-  version     Int            @default(1)
-  isActive    Boolean        @default(true)
-  expiryDate  DateTime?
-  uploadedBy  String
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  type        ReviewType       @default(ANNUAL)
+  startDate   DateTime         @db.Date
+  endDate     DateTime         @db.Date
+  dueDate     DateTime         @db.Date // When reviews should be completed
+  status      CycleStatus      @default(DRAFT)
+  isActive    Boolean          @default(true)
+  template    Json?            // Review template configuration
+  createdBy   String
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
 
-  employee Employee? @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  reviews     PerformanceReview[]
+  objectives  Objective[]
 
+  @@index([status, isActive])
+  @@index([startDate, endDate])
+  @@map("performance_cycles")
+}
+
+// OKR (Objectives and Key Results) Management
+model Objective {
+  id              String           @id @default(cuid())
+  employeeId      String
+  reviewId        String?          // Link to performance review
+  cycleId         String?          // Link to performance cycle
+  title           String
+  description     String?
+  category        ObjectiveCategory @default(INDIVIDUAL)
+  priority        Priority         @default(MEDIUM)
+  weight          Decimal          @db.Decimal(5, 2) @default(25.00) // Percentage weight (0-100)
+  status          ObjectiveStatus  @default(ACTIVE)
+  progress        Decimal          @db.Decimal(5, 2) @default(0.00) // Progress percentage (0-100)
+  startDate       DateTime         @db.Date
+  endDate         DateTime         @db.Date
+  parentId        String?          // For cascaded objectives
+  alignedTo       String?          // Department/company objective alignment
+  createdBy       String
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  employee        Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  review          PerformanceReview? @relation(fields: [reviewId], references: [id])
+  cycle           PerformanceCycle? @relation(fields: [cycleId], references: [id])
+  parent          Objective?       @relation("ObjectiveHierarchy", fields: [parentId], references: [id])
+  children        Objective[]      @relation("ObjectiveHierarchy")
+  keyResults      KeyResult[]
+  updates         ObjectiveUpdate[]
+
+  @@index([employeeId, status])
+  @@index([cycleId])
+  @@index([parentId])
+  @@map("objectives")
+}
+
+// Key Results for OKRs
+model KeyResult {
+  id              String           @id @default(cuid())
+  objectiveId     String
+  title           String
+  description     String?
+  type            KeyResultType    @default(QUANTITATIVE)
+  targetValue     Decimal?         @db.Decimal(15, 2) // Target numeric value
+  currentValue    Decimal?         @db.Decimal(15, 2) // Current numeric value
+  unit            String?          // Unit of measurement (%, $, count, etc.)
+  targetDate      DateTime?        @db.Date
+  status          KeyResultStatus  @default(ACTIVE)
+  progress        Decimal          @db.Decimal(5, 2) @default(0.00) // Progress percentage
+  weight          Decimal          @db.Decimal(5, 2) @default(25.00) // Weight within objective
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  objective       Objective        @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  updates         KeyResultUpdate[]
+
+  @@index([objectiveId])
+  @@map("key_results")
+}
+
+// Progress Updates for Objectives
+model ObjectiveUpdate {
+  id              String           @id @default(cuid())
+  objectiveId     String
+  progress        Decimal          @db.Decimal(5, 2) // Progress percentage
+  comments        String?
+  challenges      String?          // Challenges faced
+  nextSteps       String?          // Next steps planned
+  updatedBy       String
+  updateDate      DateTime         @db.Date
+  createdAt       DateTime         @default(now())
+
+  objective       Objective        @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+
+  @@index([objectiveId, updateDate])
+  @@map("objective_updates")
+}
+
+// Progress Updates for Key Results
+model KeyResultUpdate {
+  id              String           @id @default(cuid())
+  keyResultId     String
+  currentValue    Decimal          @db.Decimal(15, 2)
+  progress        Decimal          @db.Decimal(5, 2) // Progress percentage
+  comments        String?
+  evidence        Json?            // Supporting evidence/links
+  updatedBy       String
+  updateDate      DateTime         @db.Date
+  createdAt       DateTime         @default(now())
+
+  keyResult       KeyResult        @relation(fields: [keyResultId], references: [id], onDelete: Cascade)
+
+  @@index([keyResultId, updateDate])
+  @@map("key_result_updates")
+}
+
+// 360-Degree Feedback System
+model Feedback {
+  id              String           @id @default(cuid())
+  reviewId        String?          // Link to performance review
+  employeeId      String           // Employee being reviewed
+  reviewerId      String           // Person giving feedback
+  reviewerType    ReviewerType     // SELF, MANAGER, PEER, SUBORDINATE, EXTERNAL
+  relationship    String?          // Description of working relationship
+  isAnonymous     Boolean          @default(false)
+  status          FeedbackStatus   @default(PENDING)
+  responses       Json?            // Feedback responses to questions
+  overallRating   Decimal?         @db.Decimal(3, 2) // Overall rating
+  strengths       String?          // Key strengths
+  improvements    String?          // Areas for improvement
+  comments        String?          // Additional comments
+  submittedAt     DateTime?
+  dueDate         DateTime?        @db.Date
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  employee        Employee         @relation("FeedbackEmployee", fields: [employeeId], references: [id], onDelete: Cascade)
+  reviewer        Employee         @relation("FeedbackReviewer", fields: [reviewerId], references: [id], onDelete: Cascade)
+  review          PerformanceReview? @relation(fields: [reviewId], references: [id])
+
+  @@index([employeeId, reviewerType])
+  @@index([reviewerId])
+  @@index([reviewId])
+  @@map("feedbacks")
+}
+
+// Feedback Templates and Questions
+model FeedbackTemplate {
+  id              String           @id @default(cuid())
+  name            String           @unique
+  description     String?
+  reviewerType    ReviewerType     // Which type of reviewer this template is for
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  questions       FeedbackQuestion[]
+
+  @@map("feedback_templates")
+}
+
+model FeedbackQuestion {
+  id              String           @id @default(cuid())
+  templateId      String
+  question        String
+  type            QuestionType     @default(RATING) // RATING, TEXT, MULTIPLE_CHOICE
+  options         Json?            // For multiple choice questions
+  isRequired      Boolean          @default(true)
+  order           Int              @default(0)
+  category        String?          // Question category (Leadership, Communication, etc.)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  template        FeedbackTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, order])
+  @@map("feedback_questions")
+}
+
+// Enhanced Document Management System
+model Document {
+  id              String            @id @default(cuid())
+  employeeId      String?
+  title           String
+  description     String?
+  category        DocumentCategory
+  fileName        String
+  originalName    String?
+  fileUrl         String
+  fileSize        Int?
+  mimeType        String?
+  version         Int               @default(1)
+  status          DocumentStatus    @default(ACTIVE)
+  isRequired      Boolean           @default(false)
+  expiryDate      DateTime?
+  tags            Json?             // Array of tags for categorization
+  metadata        Json?             // Additional metadata
+  uploadedBy      String
+  approvalStatus  ApprovalStatus    @default(PENDING)
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  employee        Employee?         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  versions        DocumentVersion[]
+  approvals       DocumentApproval[]
+  shares          DocumentShare[]
+  accessLogs      DocumentAccessLog[]
+  reminders       DocumentReminder[]
+
+  @@index([employeeId, category])
+  @@index([status, approvalStatus])
+  @@index([expiryDate])
+  @@index([uploadedBy])
   @@map("documents")
+}
+
+model DocumentVersion {
+  id              String            @id @default(cuid())
+  documentId      String
+  version         Int
+  fileName        String
+  fileUrl         String
+  fileSize        Int?
+  mimeType        String?
+  changeLog       String?           // Description of changes
+  uploadedBy      String
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+
+  document        Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version])
+  @@index([documentId])
+  @@map("document_versions")
+}
+
+model DocumentApproval {
+  id              String            @id @default(cuid())
+  documentId      String
+  approverId      String
+  approverName    String?           // Store approver name for historical reference
+  approverEmail   String?           // Store approver email for historical reference
+  level           Int               @default(1) // Approval level (1, 2, 3, etc.)
+  status          ApprovalStatus    @default(PENDING)
+  approvedAt      DateTime?
+  rejectedAt      DateTime?
+  comments        String?
+  digitalSignature Json?            // Digital signature data
+  notificationSent Boolean          @default(false)
+  notificationSentAt DateTime?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  document        Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, level])
+  @@index([approverId, status])
+  @@index([documentId])
+  @@map("document_approvals")
+}
+
+model DocumentShare {
+  id              String            @id @default(cuid())
+  documentId      String
+  sharedWith      String            // User ID or email
+  sharedBy        String
+  permissions     DocumentPermission @default(READ)
+  expiresAt       DateTime?
+  accessCount     Int               @default(0)
+  lastAccessedAt  DateTime?
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  document        Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([sharedWith])
+  @@map("document_shares")
+}
+
+model DocumentAccessLog {
+  id              String            @id @default(cuid())
+  documentId      String
+  userId          String?
+  userName        String?           // Store username for historical reference
+  action          DocumentAction
+  ipAddress       String?
+  userAgent       String?
+  location        Json?             // GPS coordinates if available
+  deviceInfo      Json?             // Device information
+  success         Boolean           @default(true)
+  errorMessage    String?
+  timestamp       DateTime          @default(now())
+
+  document        Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, timestamp])
+  @@index([userId])
+  @@index([action])
+  @@map("document_access_logs")
+}
+
+model DocumentReminder {
+  id              String            @id @default(cuid())
+  documentId      String
+  employeeId      String
+  reminderType    ReminderType
+  reminderDate    DateTime
+  message         String?
+  isSent          Boolean           @default(false)
+  sentAt          DateTime?
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  document        Document          @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
+  @@index([employeeId, reminderDate])
+  @@index([reminderDate, isSent])
+  @@map("document_reminders")
+}
+
+model DocumentTemplate {
+  id              String            @id @default(cuid())
+  name            String            @unique
+  description     String?
+  category        DocumentCategory
+  isRequired      Boolean           @default(false)
+  validityPeriod  Int?              // Validity period in days
+  approvalLevels  Int               @default(1)
+  approvers       Json?             // Array of approver roles/users
+  reminderDays    Json?             // Array of reminder days before expiry
+  template        Json?             // Template structure/fields
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@map("document_templates")
+}
+
+model DocumentRetentionPolicy {
+  id              String            @id @default(cuid())
+  name            String            @unique
+  description     String?
+  category        DocumentCategory?
+  retentionPeriod Int               // Retention period in days
+  action          RetentionAction   @default(ARCHIVE) // Action after retention period
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  @@map("document_retention_policies")
 }
 
 // Employee Onboarding System
@@ -878,6 +1682,11 @@ enum EmploymentType {
   PART_TIME
   CONTRACT
   INTERN
+}
+
+enum EmployeeType {
+  NORMAL
+  FIELD_EMPLOYEE
 }
 
 enum EmployeeStatus {
@@ -995,21 +1804,50 @@ enum RevisionStatus {
   IMPLEMENTED
 }
 
-enum ExpenseCategory {
-  TRAVEL
-  FUEL
-  MEALS
-  ACCOMMODATION
-  OFFICE_SUPPLIES
-  TRAINING
-  OTHER
-}
-
 enum ExpenseStatus {
   PENDING
   APPROVED
   REJECTED
   REIMBURSED
+  CANCELLED
+}
+
+enum ReimbursementStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CASH
+  CHEQUE
+}
+
+enum PolicyRuleType {
+  AMOUNT_LIMIT
+  FREQUENCY_LIMIT
+  APPROVAL_REQUIRED
+  RECEIPT_REQUIRED
+  GPS_REQUIRED
+}
+
+enum TravelMode {
+  FLIGHT
+  TRAIN
+  BUS
+  CAR
+  TAXI
+  OTHER
+}
+
+enum TravelRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  COMPLETED
+  CANCELLED
 }
 
 enum ReviewType {
@@ -1017,12 +1855,89 @@ enum ReviewType {
   HALF_YEARLY
   ANNUAL
   PROBATION
+  MID_YEAR
+  PROJECT_BASED
 }
 
 enum ReviewStatus {
   DRAFT
   SUBMITTED
+  IN_REVIEW
   COMPLETED
+  CALIBRATED
+  PUBLISHED
+}
+
+enum CycleStatus {
+  DRAFT
+  ACTIVE
+  IN_PROGRESS
+  CALIBRATION
+  COMPLETED
+  ARCHIVED
+}
+
+enum ObjectiveCategory {
+  INDIVIDUAL
+  TEAM
+  DEPARTMENT
+  COMPANY
+  PROJECT
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ObjectiveStatus {
+  DRAFT
+  ACTIVE
+  ON_TRACK
+  AT_RISK
+  BEHIND
+  COMPLETED
+  CANCELLED
+}
+
+enum KeyResultType {
+  QUANTITATIVE
+  QUALITATIVE
+  MILESTONE
+  BINARY
+}
+
+enum KeyResultStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+  DEFERRED
+}
+
+enum ReviewerType {
+  SELF
+  MANAGER
+  PEER
+  SUBORDINATE
+  EXTERNAL
+  SKIP_LEVEL
+}
+
+enum FeedbackStatus {
+  PENDING
+  IN_PROGRESS
+  SUBMITTED
+  OVERDUE
+}
+
+enum QuestionType {
+  RATING
+  TEXT
+  MULTIPLE_CHOICE
+  YES_NO
+  SCALE
 }
 
 enum DocumentCategory {
@@ -1033,6 +1948,51 @@ enum DocumentCategory {
   PERFORMANCE
   LEAVE
   EXPENSE
+  TRAINING
+  LEGAL
+  MEDICAL
+  INSURANCE
+  TAX
+  BANK
+  OTHER
+}
+
+enum DocumentStatus {
+  ACTIVE
+  ARCHIVED
+  EXPIRED
+  DELETED
+  UNDER_REVIEW
+}
+
+enum DocumentPermission {
+  READ
+  WRITE
+  ADMIN
+}
+
+enum DocumentAction {
+  VIEW
+  DOWNLOAD
+  UPLOAD
+  UPDATE
+  DELETE
+  SHARE
+  APPROVE
+  REJECT
+}
+
+enum ReminderType {
+  EXPIRY_WARNING
+  RENEWAL_DUE
+  APPROVAL_PENDING
+  COMPLIANCE_CHECK
+}
+
+enum RetentionAction {
+  ARCHIVE
+  DELETE
+  REVIEW
 }
 
 enum UserRole {
@@ -1087,4 +2047,204 @@ enum AttendanceRequestStatus {
   APPROVED
   REJECTED
   FAILED
+}
+
+enum TimesheetStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  ON_HOLD
+  CANCELLED
+}
+
+// Announcement Management
+model Announcement {
+  id          String            @id @default(cuid())
+  title       String
+  content     String            @db.Text
+  type        AnnouncementType  @default(GENERAL)
+  priority    AnnouncementPriority @default(NORMAL)
+  status      AnnouncementStatus @default(DRAFT)
+  publishedAt DateTime?
+  expiresAt   DateTime?
+  attachments Json?             // Array of attachment file URLs and metadata
+  targetAudience Json?          // Array of department IDs, role IDs, or employee IDs
+  isGlobal    Boolean           @default(false) // If true, visible to all employees
+  viewCount   Int               @default(0)
+  createdBy   String
+  publishedBy String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  views AnnouncementView[]
+
+  @@index([status, publishedAt])
+  @@index([type, priority])
+  @@index([createdBy])
+  @@map("announcements")
+}
+
+model AnnouncementView {
+  id             String   @id @default(cuid())
+  announcementId String
+  employeeId     String
+  viewedAt       DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  employee     Employee     @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@unique([announcementId, employeeId])
+  @@index([employeeId])
+  @@map("announcement_views")
+}
+
+enum AnnouncementType {
+  GENERAL
+  POLICY
+  EVENT
+  HOLIDAY
+  SYSTEM
+  URGENT
+  CELEBRATION
+}
+
+enum AnnouncementPriority {
+  LOW
+  NORMAL
+  HIGH
+  CRITICAL
+}
+
+enum AnnouncementStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  EXPIRED
+}
+
+enum SiteType {
+  CLIENT
+  VENDOR
+  PARTNER
+  WAREHOUSE
+  OFFICE
+  OTHER
+}
+
+enum SiteVisitStatus {
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  MISSED
+}
+
+// Distance Tracking and Calculation System
+model DistanceTrackingPoint {
+  id                    String   @id @default(cuid())
+  employeeId            String
+  timestamp             DateTime @default(now())
+  latitude              Decimal  @db.Decimal(10, 8)
+  longitude             Decimal  @db.Decimal(11, 8)
+  accuracy              Decimal? @db.Decimal(6, 2) // GPS accuracy in meters
+  siteId                String?
+  siteName              String?
+  distanceFromPrevious  Decimal? @db.Decimal(10, 2) // Distance in meters
+  durationFromPrevious  Int?     // Duration in seconds
+  calculationMethod     DistanceCalculationMethod @default(HAVERSINE)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  @@index([employeeId, timestamp])
+  @@index([timestamp])
+  @@map("distance_tracking_points")
+}
+
+model DailyDistanceRecord {
+  id            String   @id @default(cuid())
+  employeeId    String
+  date          DateTime @db.Date
+  totalDistance Decimal  @db.Decimal(10, 2) @default(0) // Total distance in meters
+  totalDuration Int?     // Total duration in seconds
+  checkInCount  Int      @default(0) // Number of check-ins for the day
+  isValidated   Boolean  @default(true) // Whether the record passed anomaly detection
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  employee  Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  anomalies DistanceAnomaly[]
+
+  @@unique([employeeId, date], name: "employeeId_date")
+  @@index([employeeId, date])
+  @@index([date])
+  @@map("daily_distance_records")
+}
+
+model DistanceAnomaly {
+  id              String                @id @default(cuid())
+  employeeId      String
+  date            DateTime              @db.Date
+  checkInPointId  String
+  type            DistanceAnomalyType
+  description     String
+  severity        AnomalySeverity       @default(MEDIUM)
+  isResolved      Boolean               @default(false)
+  resolvedBy      String?
+  resolvedAt      DateTime?
+  resolutionNotes String?
+  detectedAt      DateTime              @default(now())
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  employee           Employee            @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  dailyDistanceRecord DailyDistanceRecord @relation(fields: [employeeId, date], references: [employeeId, date], onDelete: Cascade)
+
+  @@index([employeeId, date])
+  @@index([type, severity])
+  @@index([isResolved])
+  @@map("distance_anomalies")
+}
+
+// Distance Calculation Configuration
+model DistanceCalculationConfig {
+  id                        String   @id @default(cuid())
+  maxSpeedKmh               Int      @default(120) // Maximum reasonable speed in km/h
+  maxDistancePerDayKm       Int      @default(500) // Maximum distance per day in km
+  minTimeBetweenCheckins    Int      @default(5)   // Minimum time between check-ins in minutes
+  enableGoogleMatrixAPI     Boolean  @default(true)
+  anomalyDetectionEnabled   Boolean  @default(true)
+  googleMapsApiKey          String?  // Encrypted API key
+  isActive                  Boolean  @default(true)
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@map("distance_calculation_configs")
+}
+
+enum DistanceCalculationMethod {
+  HAVERSINE
+  GOOGLE_MATRIX
+}
+
+enum DistanceAnomalyType {
+  EXCESSIVE_SPEED
+  IMPOSSIBLE_DISTANCE
+  LOCATION_JUMP
+  MISSING_ROUTE
+  DUPLICATE_CHECKIN
+}
+
+enum AnomalySeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }

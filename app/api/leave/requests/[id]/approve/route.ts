@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { LeaveService } from '@/lib/leave-service'
 import { z } from 'zod'
+import { emailService } from '@/lib/email-service'
 
 // Validation schema for approval action
 const approvalActionSchema = z.object({
@@ -42,6 +43,7 @@ export async function POST(
         employee: {
           select: {
             id: true,
+            userId: true,
             firstName: true,
             lastName: true,
             employeeCode: true,
@@ -167,6 +169,18 @@ export async function POST(
 
       // Restore leave balance
       await LeaveService.updateBalanceForLeaveRequest(id, 'REJECTED')
+
+      // Notify employee
+      try {
+        const user = await prisma.user.findUnique({ where: { id: leaveRequest.employee.userId } })
+        if (user?.email) {
+          await emailService.sendEmail({
+            to: user.email,
+            subject: 'Your leave request was rejected',
+            html: `<p>Hi ${leaveRequest.employee.firstName},</p><p>Your leave request for ${leaveRequest.policy.name} was rejected.</p><p>Comments: ${comments || 'N/A'}</p>`
+          })
+        }
+      } catch (e) { console.warn('Email send failed (leave rejected):', e) }
     } else {
       // Check if all required approvals are complete
       const updatedApprovals = await prisma.leaveApproval.findMany({
@@ -194,6 +208,18 @@ export async function POST(
 
         // Update leave balance (move from pending to used)
         await LeaveService.updateBalanceForLeaveRequest(id, 'APPROVED')
+
+        // Notify employee
+        try {
+          const user = await prisma.user.findUnique({ where: { id: leaveRequest.employee.userId } })
+          if (user?.email) {
+            await emailService.sendEmail({
+              to: user.email,
+              subject: 'Your leave request was approved',
+              html: `<p>Hi ${leaveRequest.employee.firstName},</p><p>Your leave request for ${leaveRequest.policy.name} from ${leaveRequest.startDate.toDateString()} to ${leaveRequest.endDate.toDateString()} was approved.</p>`
+            })
+          }
+        } catch (e) { console.warn('Email send failed (leave approved):', e) }
       }
       // If not all approved yet, status remains PENDING
     }
@@ -272,6 +298,7 @@ export async function GET(
         employee: {
           select: {
             id: true,
+            userId: true,
             firstName: true,
             lastName: true,
             employeeCode: true,

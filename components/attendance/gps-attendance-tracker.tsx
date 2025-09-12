@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Progress } from '@/components/ui/progress'
-import { MapPin, Clock, Smartphone, Wifi, WifiOff, AlertTriangle, CheckCircle } from 'lucide-react'
+import { MapPin, Clock, Smartphone, Wifi, WifiOff, AlertTriangle, CheckCircle, Route } from 'lucide-react'
 import { toast } from 'sonner'
 
 interface LocationData {
@@ -173,6 +173,26 @@ export function GPSAttendanceTracker() {
       const data = await response.json()
 
       if (response.ok) {
+        // Track distance for this check-in
+        try {
+          await fetch('/api/distance-tracking', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              location: {
+                latitude: location.latitude,
+                longitude: location.longitude,
+                accuracy: location.accuracy,
+              },
+            }),
+          })
+        } catch (distanceError) {
+          console.warn('Failed to track distance:', distanceError)
+          // Don't fail the check-in if distance tracking fails
+        }
+
         toast.success(data.message)
         await fetchStatus()
       } else {

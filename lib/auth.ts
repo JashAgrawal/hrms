@@ -5,6 +5,7 @@ import Google from "next-auth/providers/google"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
 import { UserRole } from "@prisma/client"
+import { hasPermission, type Permission } from "@/lib/permissions"
 
 export const { handlers, auth, signIn, signOut, } = NextAuth({
   adapter: PrismaAdapter(prisma),
@@ -234,3 +235,8 @@ export const { handlers, auth, signIn, signOut, } = NextAuth({
     }
   },
 })
+
+/**
+ * Alias for hasPermission from permissions module
+ */
+export const checkPermission = hasPermission

@@ -119,6 +119,22 @@
   - Create attendance trend analysis and insights
   - _Requirements: 3.3, 3.5_
 
+- [x] 6.4 Implement field employee site-based attendance system
+
+  - Create employee type classification (Normal vs Field Employee)
+  - Build site check-in functionality with GPS location capture
+  - Implement multi-site visit tracking throughout the day
+  - Create site master data management for predefined locations
+  - _Requirements: 3.1, 3.2, 6.1, 6.2_
+
+- [x] 6.5 Build distance calculation and tracking system
+
+  - Integrate Google Distance Matrix API for route calculation
+  - Implement distance calculation between consecutive check-in points
+  - Create daily distance tracking and accumulation
+  - Build distance validation and anomaly detection
+  - _Requirements: 3.2, 6.1, 6.2_
+
 - [x] 7. Leave Management System
 - [x] 7.1 Implement leave policy configuration and management
 
@@ -163,158 +179,230 @@
   - Build payroll correction and adjustment functionality
   - _Requirements: 5.1, 5.3_
 
-- [ ] 8.4 Create payslip generation and distribution
+- [x] 8.4 Create payslip generation and distribution
 
   - Build PDF payslip generation with company branding
   - Implement secure payslip access for employees
   - Create bulk payslip email distribution system
   - _Requirements: 5.1, 5.6_
 
-- [ ] 9. Expense and Travel Management System
-- [ ] 9.1 Implement expense claim creation and submission
+- [-] 9. Expense and Reimbursement Management System
+- [x] 9.1 Create expense claim API endpoints and data models
 
-  - Create expense claim form with receipt upload
-  - Build expense categorization and policy validation
-  - Implement GPS location capture for expense verification
+  - Implement ExpenseClaim CRUD API routes with attachment support
+  - Create expense category management endpoints (including petrol expenses)
+  - Build expense policy validation API with rate configurations
+  - Add expense claim status tracking and multi-level approval workflow
+  - Create expense attachment/bill upload and management system
   - _Requirements: 6.1, 6.3, 6.4_
 
-- [ ] 9.2 Build travel request and booking system
+- [x] 9.2 Build automated petrol expense calculation and tracking system
 
-  - Create travel request form with itinerary planning
-  - Implement travel policy compliance checking
-  - Build travel booking integration and tracking
+  - Create petrol expense rate configuration (admin-defined rate per km)
+  - Implement automatic daily distance calculation and expense computation
+  - Build monthly automated expense reimbursement request generation
+  - Create petrol expense tracking and accumulation system
+  - Add field employee daily distance and expense preview functionality
   - _Requirements: 6.1, 6.2, 6.4_
 
-- [ ] 9.3 Create expense approval and reimbursement workflow
+- [x] 9.3 Build comprehensive expense claim submission and management UI
 
-  - Implement multi-level expense approval routing
-  - Build expense policy violation detection and handling
-  - Create reimbursement processing and payment integration
+  - Create expense claim form with multiple attachment/bill upload functionality
+  - Implement expense categorization and policy validation interface
+  - Build GPS location capture for mobile expense verification
+  - Create expense claim list with filtering, sorting, and status tracking
+  - Add petrol expense preview with daily/monthly distance summaries
+  - Build expense claim approval interface for managers
+  - _Requirements: 6.1, 6.3, 6.4_
+
+- [x] 9.4 Implement travel request and expense system
+
+  - Create travel request API endpoints and data models
+  - Build travel request form with itinerary planning and expense estimation
+  - Implement travel policy compliance checking and validation
+  - Create travel request approval workflow with expense pre-approval
+  - Add travel expense claim integration with actual vs estimated costs
   - _Requirements: 6.1, 6.2, 6.4_
 
-- [ ] 10. Performance Management System
-- [ ] 10.1 Implement OKR (Objectives and Key Results) management
+- [x] 9.5 Create expense approval and reimbursement workflow system
+
+  - Implement multi-level expense approval routing based on amount and type
+  - Build expense policy violation detection and handling with notifications
+  - Create reimbursement processing system (separate from payroll)
+  - Build comprehensive expense reporting and analytics dashboard
+  - Add automated monthly petrol expense reimbursement generation
+  - Create expense audit trail and compliance reporting
+  - _Requirements: 6.1, 6.2, 6.4_
+
+- [x] 9.6 Build expense reimbursement processing and payment system
+
+  - Create reimbursement batch processing for approved expenses
+  - Implement reimbursement payment tracking and status management
+  - Build integration with banking systems for direct payments
+  - Create reimbursement reports and employee payment summaries
+  - Add reimbursement notification system for employees and finance team
+  - _Requirements: 6.1, 6.2, 6.4_
+
+- [x] 10. Performance Management System
+- [x] 10.1 Create performance review API endpoints and data models
+
+  - Implement PerformanceReview CRUD API routes
+  - Create performance goal and OKR management endpoints
+  - Build performance rating and feedback API
+  - Add performance review cycle management
+  - _Requirements: 7.1, 7.2, 7.3_
+
+- [x] 10.2 Build OKR (Objectives and Key Results) management interface
 
   - Create OKR setting and tracking interface
   - Build progress monitoring and update system
   - Implement OKR alignment and cascade functionality
+  - Create OKR dashboard and reporting
   - _Requirements: 7.1, 7.2, 7.3_
 
-- [ ] 10.2 Build 360-degree feedback system
+- [x] 10.3 Implement 360-degree feedback system
 
   - Create feedback collection forms for peers, managers, and subordinates
   - Implement anonymous feedback aggregation
   - Build feedback report generation and insights
+  - Create feedback request and notification system
   - _Requirements: 7.1, 7.2, 7.4_
 
-- [ ] 10.3 Create performance review cycle management
+- [x] 10.4 Create performance review cycle management
 
   - Build performance review scheduling and workflow
   - Implement review template configuration
   - Create performance rating and calibration system
+  - Build performance analytics and trend reporting
   - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-- [ ] 11. Document Management System
-- [ ] 11.1 Implement secure file upload and storage
+- [x] 11. Enhanced Document Management System
+- [x] 11.1 Enhance document workflow and approval system
 
-  - Create file upload component with validation and virus scanning
-  - Build secure file storage with access control
-  - Implement file versioning and history tracking
-  - _Requirements: 8.1, 8.3, 8.5, 10.3_
-
-- [ ] 11.2 Build document workflow and approval system
-
-  - Create document approval routing and tracking
+  - Create document approval routing and tracking beyond basic upload
   - Implement digital signature integration
   - Build document expiry and renewal reminder system
+  - Add document version control and history tracking
   - _Requirements: 8.1, 8.2, 8.4, 8.5_
 
-- [ ] 11.3 Create document search and organization system
+- [x] 11.2 Create document search and organization system
 
-  - Build document categorization and tagging
+  - Build document categorization and tagging system
   - Implement full-text search across documents
   - Create document access audit and compliance tracking
+  - Add document sharing and collaboration features
   - _Requirements: 8.1, 8.3, 8.5_
 
-- [ ] 12. Mobile Application Support
+- [x] 11.3 Implement advanced document security features
+
+  - Add document encryption and secure access controls
+  - Implement document watermarking and DRM
+  - Create document retention policy management
+  - Build compliance reporting for document access
+  - _Requirements: 8.1, 8.3, 8.5, 10.3_
+
+- [ ] 12. Mobile Application Support (PWA)
 - [ ] 12.1 Create Progressive Web App (PWA) configuration
 
   - Configure service worker for offline functionality
-  - Implement push notification support
+  - Implement push notification support for mobile devices
+  - Create web app manifest for mobile installation
   - Build responsive mobile-first UI components
   - _Requirements: 9.1, 9.2, 9.3, 9.4_
 
-- [ ] 12.2 Implement mobile-specific attendance features
+- [ ] 12.2 Build field employee mobile attendance interface
 
-  - Build GPS-based check-in with location verification
+  - Create field employee specific check-in interface
+  - Implement site selection and GPS location capture
+  - Build multi-site check-in workflow with distance tracking
+  - Add real-time distance calculation and petrol expense preview
+  - Create offline site check-in with sync capability
+  - _Requirements: 3.1, 3.2, 6.1, 6.2, 9.1, 9.2_
+
+- [ ] 12.3 Enhance mobile attendance features for normal employees
+
+  - Improve GPS-based check-in with better location verification
   - Create offline attendance capture with sync capability
-  - Implement biometric authentication for mobile devices
+  - Implement camera-based attendance verification
+  - Add mobile-specific attendance dashboard
   - _Requirements: 3.1, 3.2, 9.1, 9.2, 9.3_
 
-- [ ] 12.3 Build mobile expense and travel features
+- [ ] 12.4 Build mobile expense and travel features
 
-  - Create camera-based receipt capture and OCR processing
+  - Create camera-based receipt/bill capture and OCR processing
   - Implement GPS-based mileage tracking for travel expenses
-  - Build offline expense entry with automatic sync
+  - Build offline expense entry with automatic sync capability
+  - Add mobile expense approval workflow for managers
+  - Create daily distance and petrol expense tracking interface
+  - Build mobile attachment management for expense claims
+  - Add mobile reimbursement status tracking and notifications
   - _Requirements: 6.1, 6.3, 9.1, 9.2, 9.3_
 
 - [ ] 13. External Integrations
 - [ ] 13.1 Implement biometric device integration
 
   - Create API endpoints for biometric device communication
-  - Build real-time attendance data synchronization
-  - Implement device management and configuration
+  - Build real-time attendance data synchronization from devices
+  - Implement device management and configuration interface
+  - Add support for multiple biometric device protocols
   - _Requirements: 3.1, 10.1_
 
 - [ ] 13.2 Build banking and accounting software integration
 
-  - Create salary disbursement file generation for banks
+  - Create salary disbursement file generation for banks (NEFT/RTGS formats)
   - Implement integration with Tally, QuickBooks, and Zoho Books
   - Build automated financial data synchronization
+  - Create payroll export formats for various accounting systems
   - _Requirements: 5.1, 5.7, 10.1_
 
 - [ ] 13.3 Implement notification and communication services
 
-  - Create email notification system with templates
-  - Build SMS and WhatsApp integration for alerts
+  - Create comprehensive email notification system with templates
+  - Build SMS and WhatsApp integration for alerts and notifications
   - Implement real-time in-app notification system
+  - Add notification preferences and delivery tracking
   - _Requirements: 4.2, 4.5, 8.2, 10.1_
 
-- [ ] 14. Reporting and Analytics System
+- [ ] 14. Advanced Reporting and Analytics System
 - [ ] 14.1 Build comprehensive reporting engine
 
   - Create configurable report builder with drag-and-drop interface
   - Implement scheduled report generation and distribution
   - Build export functionality for multiple formats (PDF, Excel, CSV)
+  - Add custom report templates and sharing capabilities
   - _Requirements: 5.3, 7.3_
 
 - [ ] 14.2 Create analytics dashboards and insights
 
-  - Build executive dashboard with key HR metrics
+  - Build executive dashboard with key HR metrics and KPIs
   - Implement predictive analytics for attrition and performance
   - Create department-wise and role-based analytics views
+  - Add trend analysis and forecasting capabilities
   - _Requirements: 7.3_
 
 - [ ] 14.3 Implement compliance and audit reporting
 
-  - Create statutory compliance reports for government filings
-  - Build audit trail reporting for all system activities
+  - Create statutory compliance reports for government filings (PF, ESI, PT, TDS)
+  - Build comprehensive audit trail reporting for all system activities
   - Implement data privacy and GDPR compliance reporting
+  - Add automated compliance alerts and notifications
   - _Requirements: 5.2, 5.3, 10.5_
 
-- [ ] 15. Security and Compliance Implementation
-- [ ] 15.1 Implement data encryption and security measures
+- [ ] 15. Enhanced Security and Compliance
+- [ ] 15.1 Implement advanced data encryption and security measures
 
-  - Configure data encryption at rest and in transit
-  - Build secure API authentication and rate limiting
-  - Implement SQL injection and XSS protection
+  - Configure end-to-end data encryption at rest and in transit
+  - Build secure API authentication with rate limiting and throttling
+  - Implement advanced SQL injection and XSS protection
+  - Add multi-factor authentication (MFA) support
   - _Requirements: 10.3, 10.4, 10.5_
 
-- [ ] 15.2 Create audit logging and monitoring system
+- [ ] 15.2 Enhance audit logging and monitoring system
 
-  - Build comprehensive audit trail for all user actions
-  - Implement security event monitoring and alerting
-  - Create compliance reporting for data access and modifications
+  - Expand comprehensive audit trail for all user actions
+  - Implement real-time security event monitoring and alerting
+  - Create advanced compliance reporting for data access and modifications
+  - Add security dashboard and threat detection
   - _Requirements: 2.5, 10.5_
 
 - [ ] 15.3 Implement backup and disaster recovery
@@ -322,34 +410,38 @@
   - Create automated database backup and restoration procedures
   - Build data replication and failover mechanisms
   - Implement business continuity planning and testing
+  - Add data recovery testing and validation procedures
   - _Requirements: 10.3_
 
 - [ ] 16. Testing and Quality Assurance
 - [ ] 16.1 Create comprehensive unit test suite
 
-  - Write unit tests for all business logic functions
-  - Implement API endpoint testing with mock data
-  - Create component testing for React components
+  - Write unit tests for all business logic functions and utilities
+  - Implement API endpoint testing with comprehensive mock data
+  - Create component testing for React components using Jest and Testing Library
+  - Add test coverage reporting and quality gates
   - _Requirements: All requirements for code quality_
 
 - [ ] 16.2 Build integration and end-to-end test suite
 
-  - Create integration tests for database operations
-  - Implement end-to-end testing for critical user workflows
+  - Create integration tests for database operations and API workflows
+  - Implement end-to-end testing for critical user workflows using Playwright
   - Build performance testing for payroll and reporting systems
+  - Add load testing for high-traffic scenarios
   - _Requirements: All requirements for system reliability_
 
 - [ ] 16.3 Implement automated testing and CI/CD pipeline
 
-  - Configure automated testing in GitHub Actions or similar
+  - Configure automated testing in GitHub Actions with multiple environments
   - Build deployment pipeline with staging and production environments
-  - Implement code quality checks and security scanning
+  - Implement code quality checks, security scanning, and dependency audits
+  - Add automated database migration and rollback procedures
   - _Requirements: All requirements for deployment reliability_
 
 - [ ] 17. Performance Optimization and Monitoring
 - [ ] 17.1 Implement caching and performance optimization
 
-  - Configure Redis caching for frequently accessed data
+  - Configure Redis caching for frequently accessed data and sessions
   - Implement database query optimization and indexing
   - Build CDN integration for static assets and file storage
   - _Requirements: Performance requirements from all modules_

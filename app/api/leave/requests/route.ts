@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { LeaveService } from '@/lib/leave-service'
 import { z } from 'zod'
+import { emailService } from '@/lib/email-service'
 
 // Validation schema for leave request
 const leaveRequestSchema = z.object({
@@ -107,8 +108,18 @@ export async function GET(request: NextRequest) {
             }
           },
           approvals: {
-            include: {
-              leaveRequest: false, // Avoid circular reference
+            select: {
+              id: true,
+              approverId: true,
+              approverName: true,
+              approverEmail: true,
+              level: true,
+              status: true,
+              approvedAt: true,
+              rejectedAt: true,
+              comments: true,
+              createdAt: true,
+              updatedAt: true
             },
             orderBy: { level: 'asc' }
           }
@@ -286,6 +297,18 @@ export async function POST(request: NextRequest) {
       }
     })
 
+    // Send email notifications
+    try {
+      const employeeEmail = currentUser.email || `${currentUser.employee!.employeeCode}@example.com`
+      await emailService.sendEmail({
+        to: employeeEmail,
+        subject: `Leave request submitted (${policy.name})`,
+        html: `<p>Hi ${currentUser.name || 'Employee'},</p><p>Your leave request for ${policy.name} from ${startDate.toDateString()} to ${endDate.toDateString()} has been submitted.</p>`,
+      })
+    } catch (e) {
+      console.warn('Email send failed (leave submit):', e)
+    }
+
     // Update leave balance (mark as pending)
     const year = startDate.getFullYear()
     await prisma.leaveBalance.updateMany({
@@ -306,9 +329,24 @@ export async function POST(request: NextRequest) {
       
       // For now, create a single approval level
       // In a more complex system, you would determine approvers based on hierarchy
+      const approverId = currentUser.employee!.reportingTo || 'admin' // Fallback to admin
+      
+      // Get approver details to store the name
+      let approverName = 'Admin'
+      if (approverId !== 'admin' && currentUser.employee!.reportingTo) {
+        const approver = await prisma.employee.findUnique({
+          where: { id: currentUser.employee!.reportingTo },
+          select: { firstName: true, lastName: true }
+        })
+        if (approver) {
+          approverName = `${approver.firstName} ${approver.lastName}`
+        }
+      }
+      
       approvals.push({
         leaveRequestId: leaveRequest.id,
-        approverId: currentUser.employee!.reportingTo || 'admin', // Fallback to admin
+        approverId,
+        approverName,
         level: 1,
         status: 'PENDING' as const
       })
@@ -316,6 +354,25 @@ export async function POST(request: NextRequest) {
       await prisma.leaveApproval.createMany({
         data: approvals
       })
+
+      // Notify manager/approver
+      try {
+        if (currentUser.employee?.reportingTo) {
+          const approver = await prisma.employee.findUnique({
+            where: { id: currentUser.employee.reportingTo },
+            include: { user: true }
+          })
+          if (approver?.user?.email) {
+            await emailService.sendEmail({
+              to: approver.user.email,
+              subject: 'New leave approval request',
+              html: `<p>Hi ${approver.firstName},</p><p>You have a new leave request to review for ${currentUser.employee.firstName} ${currentUser.employee.lastName}.</p>`,
+            })
+          }
+        }
+      } catch (e) {
+        console.warn('Email send failed (leave approver notify):', e)
+      }
     } else {
       // Auto-approve if no approval required
       await LeaveService.updateBalanceForLeaveRequest(leaveRequest.id, 'APPROVED')

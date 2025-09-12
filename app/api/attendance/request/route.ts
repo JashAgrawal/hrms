@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
     const status = searchParams.get("status") || "PENDING";
     const employeeId = searchParams.get("employeeId");
 
-    let whereClause: any = { status };
+    const whereClause: any = { status };
 
     // If not admin/HR, only show requests for employees they manage
     if (!["ADMIN", "HR"].includes(session.user.role)) {

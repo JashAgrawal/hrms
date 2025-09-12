@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { LocationService } from '@/lib/location-service'
 import { z } from 'zod'
 
 // Schema for GPS check-in request
@@ -20,22 +21,6 @@ const gpsCheckInSchema = z.object({
   }).optional(),
   notes: z.string().optional(),
 })
-
-// Calculate distance between two coordinates using Haversine formula
-function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371e3 // Earth's radius in meters
-  const φ1 = lat1 * Math.PI / 180
-  const φ2 = lat2 * Math.PI / 180
-  const Δφ = (lat2 - lat1) * Math.PI / 180
-  const Δλ = (lon2 - lon1) * Math.PI / 180
-
-  const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
-          Math.cos(φ1) * Math.cos(φ2) *
-          Math.sin(Δλ/2) * Math.sin(Δλ/2)
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a))
-
-  return R * c // Distance in meters
-}
 
 // POST /api/attendance/gps-check-in - GPS-based check-in with geo-fencing
 export async function POST(request: NextRequest) {
@@ -85,33 +70,22 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get all active locations for geo-fencing validation
-    const locations = await prisma.location.findMany({
-      where: { isActive: true }
-    })
-
-    // Check if user is within any allowed location
-    let isWithinGeofence = false
-    let nearestLocation = null
-    let minDistance = Infinity
-
-    for (const location of locations) {
-      const distance = calculateDistance(
-        data.location.latitude,
-        data.location.longitude,
-        Number(location.latitude),
-        Number(location.longitude)
-      )
-
-      if (distance < minDistance) {
-        minDistance = distance
-        nearestLocation = location
+    // Validate employee location using LocationService
+    const locationValidation = await LocationService.validateEmployeeLocation(
+      user.employee.id,
+      {
+        latitude: data.location.latitude,
+        longitude: data.location.longitude,
+        accuracy: data.location.accuracy
       }
+    )
 
-      if (distance <= location.radius) {
-        isWithinGeofence = true
-        break
-      }
+    // If no locations assigned, don't allow check-in
+    if (locationValidation.validLocations.length === 0) {
+      return NextResponse.json({
+        error: 'No locations assigned. Please contact HR to assign work locations.',
+        requiresLocationSetup: true
+      }, { status: 400 })
     }
 
     const now = new Date()
@@ -121,12 +95,58 @@ export async function POST(request: NextRequest) {
 
     // Determine attendance status
     let status = 'PRESENT'
-    let requiresApproval = false
+    const requiresApproval = false
 
-    // Check if location is valid
-    if (!isWithinGeofence) {
-      status = 'PRESENT' // Still mark as present but flag for review
-      requiresApproval = true
+    // Check if location is valid - if not, create attendance request instead
+    if (!locationValidation.isValid) {
+      // Enhanced location data for attendance request
+      const locationData = JSON.parse(JSON.stringify({
+        ...data.location,
+        validation: {
+          isValid: locationValidation.isValid,
+          requiresApproval: locationValidation.requiresApproval,
+          nearestLocation: locationValidation.nearestLocation,
+          validLocations: locationValidation.validLocations
+        }
+      }))
+
+      // Create attendance request for manager/HR approval
+      const attendanceRequest = await prisma.attendanceRequest.create({
+        data: {
+          employeeId: user.employee.id,
+          date: today,
+          checkInTime: now,
+          location: locationData,
+          reason: data.notes || 'Check-in from outside assigned location',
+          status: 'PENDING'
+        }
+      })
+      
+      // Log the attendance request creation
+      await prisma.auditLog.create({
+        data: {
+          userId: session.user.id,
+          action: 'CREATE_ATTENDANCE_REQUEST',
+          resource: 'ATTENDANCE_REQUEST',
+          resourceId: attendanceRequest.id,
+          newValues: JSON.parse(JSON.stringify({
+            reason: attendanceRequest.reason,
+            location: locationData,
+            nearestLocationDistance: locationValidation.nearestLocation?.distance,
+            validLocations: locationValidation.validLocations
+          })),
+          ipAddress: clientIP,
+          userAgent: request.headers.get('user-agent')
+        }
+      })
+      
+      return NextResponse.json({
+        success: false,
+        requiresApproval: true,
+        attendanceRequest,
+        message: `You are outside your assigned work location(s). An attendance request has been submitted for approval.${locationValidation.nearestLocation ? ` Distance to nearest assigned location: ${locationValidation.nearestLocation.distance}m` : ''}`,
+        locationValidation
+      })
     }
 
     // Check time-based status
@@ -139,17 +159,16 @@ export async function POST(request: NextRequest) {
       status = 'LATE'
     }
 
-    // Enhanced location data with geo-fencing info
-    const locationData = {
+    // Enhanced location data with validation info
+    const locationData = JSON.parse(JSON.stringify({
       ...data.location,
-      isWithinGeofence,
-      nearestLocation: nearestLocation ? {
-        id: nearestLocation.id,
-        name: nearestLocation.name,
-        distance: Math.round(minDistance)
-      } : null,
-      requiresApproval
-    }
+      validation: {
+        isValid: locationValidation.isValid,
+        requiresApproval: locationValidation.requiresApproval,
+        nearestLocation: locationValidation.nearestLocation,
+        validLocations: locationValidation.validLocations
+      }
+    }))
 
     // Create or update attendance record
     const attendanceRecord = await prisma.attendanceRecord.upsert({
@@ -202,14 +221,18 @@ export async function POST(request: NextRequest) {
         action: 'GPS_CHECK_IN',
         resource: 'ATTENDANCE',
         resourceId: attendanceRecord.id,
-        newValues: {
+        newValues: JSON.parse(JSON.stringify({
           checkIn: now,
           status,
           method: 'GPS',
           location: locationData,
-          isWithinGeofence,
-          nearestLocationDistance: Math.round(minDistance)
-        },
+          locationValidation: {
+            isValid: locationValidation.isValid,
+            requiresApproval: locationValidation.requiresApproval,
+            nearestLocation: locationValidation.nearestLocation,
+            validLocations: locationValidation.validLocations
+          }
+        })),
         ipAddress: clientIP,
         userAgent: request.headers.get('user-agent')
       }
@@ -217,8 +240,8 @@ export async function POST(request: NextRequest) {
 
     // Prepare response message
     let message = `Successfully checked in at ${now.toLocaleTimeString()}`
-    if (!isWithinGeofence) {
-      message += ` (Location verification pending - ${Math.round(minDistance)}m from nearest office)`
+    if (locationValidation.nearestLocation) {
+      message += ` at ${locationValidation.nearestLocation.name}`
     }
 
     return NextResponse.json({
@@ -227,14 +250,7 @@ export async function POST(request: NextRequest) {
         ...attendanceRecord,
         checkInOut: [checkInRecord]
       },
-      locationValidation: {
-        isWithinGeofence,
-        nearestLocation: nearestLocation ? {
-          name: nearestLocation.name,
-          distance: Math.round(minDistance)
-        } : null,
-        requiresApproval
-      },
+      locationValidation,
       message
     })
 

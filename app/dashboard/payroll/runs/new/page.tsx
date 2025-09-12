@@ -32,18 +32,6 @@ export default function NewPayrollRunPage() {
   })
 
   // Redirect if not authenticated or doesn't have permission
-  if (status === 'loading') {
-    return <div>Loading...</div>
-  }
-
-  if (!session?.user) {
-    redirect('/auth/signin')
-  }
-
-  if (!['ADMIN', 'HR', 'FINANCE'].includes(session.user.role)) {
-    redirect('/dashboard')
-  }
-
   const fetchDepartments = async () => {
     try {
       const response = await fetch('/api/departments')
@@ -59,6 +47,18 @@ export default function NewPayrollRunPage() {
   useEffect(() => {
     fetchDepartments()
   }, [])
+
+  if (status === 'loading') {
+    return <div>Loading...</div>
+  }
+
+  if (!session?.user) {
+    redirect('/auth/signin')
+  }
+
+  if (!['ADMIN', 'HR', 'FINANCE'].includes(session.user.role)) {
+    redirect('/dashboard')
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

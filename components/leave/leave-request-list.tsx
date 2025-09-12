@@ -68,6 +68,7 @@ interface LeaveRequest {
   approvals: Array<{
     id: string
     approverId: string
+    approverName?: string
     level: number
     status: 'PENDING' | 'APPROVED' | 'REJECTED'
     approvedAt?: string
@@ -616,11 +617,25 @@ function LeaveRequestDetails({ request, onApproval }: LeaveRequestDetailsProps) 
           <div className="mt-2 space-y-2">
             {request.approvals.map((approval, index) => (
               <div key={approval.id} className="flex items-center justify-between p-2 border rounded">
-                <div>
+                <div className="flex flex-col">
                   <span className="text-sm font-medium">Level {approval.level}</span>
                   {approval.comments && (
                     <p className="text-xs text-muted-foreground">{approval.comments}</p>
                   )}
+                  {/* Approver details */}
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {approval.status === 'PENDING' ? (
+                      <span>Awaiting approval</span>
+                    ) : (
+                      <span>
+                        {approval.status === 'APPROVED' ? 'Approved' : 'Rejected'}
+                        {approval.approverName ? ` by ${approval.approverName}` : ''}
+                        {approval.approvedAt || approval.rejectedAt ?
+                          ` on ${format(new Date(approval.approvedAt || approval.rejectedAt as string), 'MMM dd, yyyy p')}`
+                          : ''}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <Badge className={getStatusColor(approval.status)}>
                   {approval.status}

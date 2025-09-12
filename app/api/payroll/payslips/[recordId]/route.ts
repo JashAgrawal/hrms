@@ -50,19 +50,51 @@ export async function GET(
 
     const { searchParams } = new URL(request.url)
     const format = searchParams.get('format') || 'json'
+    const download = searchParams.get('download') === 'true'
 
     // Get payslip data
     const payslipData = await payslipService.getPayslipData(recordId)
+
+    if (format === 'pdf') {
+      // Generate PDF payslip
+      const pdfBuffer = await payslipService.generatePayslipPDF(payslipData)
+      const fileName = `payslip-${payslipData.employee.employeeCode}-${payslipData.payrollRun.period}.pdf`
+
+      // Update download count
+      await prisma.payslip.updateMany({
+        where: {
+          employeeId: payrollRecord.employeeId,
+          payrollRunId: payrollRecord.payrollRunId,
+        },
+        data: {
+          downloadCount: { increment: 1 },
+          accessedAt: new Date(),
+        },
+      })
+
+      return new NextResponse(pdfBuffer as any, {
+        headers: {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': download 
+            ? `attachment; filename="${fileName}"` 
+            : `inline; filename="${fileName}"`,
+          'Content-Length': pdfBuffer.length.toString(),
+        },
+      })
+    }
 
     if (format === 'html') {
       // Generate HTML payslip
       const template = payslipService.generatePayslipTemplate(payslipData)
       const htmlContent = payslipService.generatePayslipHTML(template)
+      const fileName = `payslip-${payslipData.employee.employeeCode}-${payslipData.payrollRun.period}.html`
 
       return new NextResponse(htmlContent, {
         headers: {
           'Content-Type': 'text/html',
-          'Content-Disposition': `inline; filename="payslip-${payslipData.employee.employeeCode}-${payslipData.payrollRun.period}.html"`,
+          'Content-Disposition': download 
+            ? `attachment; filename="${fileName}"` 
+            : `inline; filename="${fileName}"`,
         },
       })
     }

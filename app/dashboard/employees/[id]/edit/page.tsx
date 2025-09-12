@@ -70,15 +70,16 @@ async function getManagers() {
 export default async function EditEmployeePage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
-  const session = await auth()
+  const session = await auth();
+  const { id } = await params
   
   if (!session?.user) {
     redirect('/auth/signin')
   }
 
-  const employee = await getEmployee(params.id)
+  const employee = await getEmployee(id);
   
   if (!employee) {
     notFound()

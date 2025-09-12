@@ -22,6 +22,7 @@ import {
   Download
 } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/lib/utils'
+import { EmployeeSiteAssignment } from './employee-site-assignment'
 
 interface Employee {
   id: string
@@ -36,6 +37,7 @@ interface Employee {
   designation: string
   joiningDate: Date
   employmentType: string
+  employeeType: string
   status: string
   basicSalary?: number | string // Prisma Decimal type
   ctc?: number | string // Prisma Decimal type
@@ -235,12 +237,15 @@ export function EmployeeProfile({ employee }: EmployeeProfileProps) {
 
       {/* Detailed Information Tabs */}
       <Tabs defaultValue="personal" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-6">
+        <TabsList className={`grid w-full ${employee.employeeType === 'FIELD_EMPLOYEE' ? 'grid-cols-7' : 'grid-cols-6'}`}>
           <TabsTrigger value="personal">Personal</TabsTrigger>
           <TabsTrigger value="professional">Professional</TabsTrigger>
           <TabsTrigger value="salary">Salary</TabsTrigger>
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
           <TabsTrigger value="leave">Leave</TabsTrigger>
+          {employee.employeeType === 'FIELD_EMPLOYEE' && (
+            <TabsTrigger value="sites">Sites</TabsTrigger>
+          )}
           <TabsTrigger value="documents">Documents</TabsTrigger>
         </TabsList>
 
@@ -501,6 +506,19 @@ export function EmployeeProfile({ employee }: EmployeeProfileProps) {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Sites (Field Employees Only) */}
+        {employee.employeeType === 'FIELD_EMPLOYEE' && (
+          <TabsContent value="sites">
+            <EmployeeSiteAssignment employee={{
+              id: employee.id,
+              firstName: employee.firstName,
+              lastName: employee.lastName,
+              employeeCode: employee.employeeCode,
+              employeeType: employee.employeeType,
+            }} />
+          </TabsContent>
+        )}
 
         {/* Documents */}
         <TabsContent value="documents">

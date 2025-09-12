@@ -1,3 +1,4 @@
+"use client"
 import { 
   Clock, 
   Calendar, 
@@ -6,11 +7,24 @@ import {
   Target,
   FileText,
   User,
-  TrendingUp
+  TrendingUp,
+  Megaphone,
+  Users
 } from "lucide-react"
-import { StatsCard } from "./widgets/stats-card"
-import { QuickActions } from "./widgets/quick-actions"
-import { RecentActivity } from "./widgets/recent-activity"
+import { 
+  StatsCard, 
+  QuickActions, 
+  RecentActivity,
+  YourInfoCard,
+  HolidaysUpcomingLeavesCard,
+  CheckInOutCard,
+  MonthlyAttendancePreviewCard,
+  LeaveReportCard,
+  OnLeaveTodayCard,
+  AnnouncementsCard,
+  PendingTasksCard
+} from "./widgets"
+import { useEffect, useState } from "react"
 
 // Mock data - in real app, this would come from API
 const mockStats = {
@@ -87,6 +101,60 @@ const quickActions = [
 ]
 
 export function EmployeeDashboard() {
+  const [upcomingLeaves, setUpcomingLeaves] = useState<{ name: string; date: string }[]>([])
+  const [todayOnLeave, setTodayOnLeave] = useState<{ name: string }[]>([])
+  const [pendingTasks, setPendingTasks] = useState<number>(0)
+  const [announcements, setAnnouncements] = useState<{ id: string; title: string; date: string }[]>([])
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const res = await fetch('/api/leave/requests?status=APPROVED&limit=50')
+        if (res.ok) {
+          const data = await res.json()
+          const now = new Date()
+          const upcoming = (data.requests || [])
+            .filter((r: any) => new Date(r.startDate) >= now)
+            .slice(0, 5)
+            .map((r: any) => ({
+              name: `${r.employee.firstName} ${r.employee.lastName}`,
+              date: new Date(r.startDate).toLocaleDateString()
+            }))
+          setUpcomingLeaves(upcoming)
+
+          // Who is on leave today
+          const today = new Date(); today.setHours(0,0,0,0)
+          const onLeave = (data.requests || [])
+            .filter((r: any) => {
+              const s = new Date(r.startDate); const e = new Date(r.endDate)
+              const sd = new Date(s.getFullYear(), s.getMonth(), s.getDate())
+              const ed = new Date(e.getFullYear(), e.getMonth(), e.getDate())
+              return today >= sd && today <= ed
+            })
+            .slice(0, 10)
+            .map((r: any) => ({ name: `${r.employee.firstName} ${r.employee.lastName}` }))
+          setTodayOnLeave(onLeave)
+        }
+      } catch {}
+
+      try {
+        const wf = await fetch('/api/onboarding/workflows')
+        if (wf.ok) {
+          const data = await wf.json()
+          const myPending = (data.workflows || [])
+            .flatMap((w: any) => w.tasks || [])
+            .filter((t: any) => t.status === 'PENDING').length
+          setPendingTasks(myPending)
+        }
+      } catch {}
+
+      setAnnouncements([
+        { id: '1', title: 'Quarterly Townhall on Friday', date: new Date().toLocaleDateString() }
+      ])
+    }
+    fetchData()
+  }, [])
+
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
@@ -135,17 +203,74 @@ export function EmployeeDashboard() {
         />
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Quick Actions */}
-        <div className="lg:col-span-1">
-          <QuickActions title="Quick Actions" actions={quickActions} />
+      {/* Bento Grid Dashboard Layout */}
+      {/*
+        Responsive bento grid that adapts card sizes based on content density and importance:
+        - Mobile: Single column stack
+        - Tablet: 6-column grid with appropriate spans
+        - Desktop: 12-column grid with optimized spacing
+
+        Layout Strategy:
+        - Large cards (5-6 cols): Content-heavy widgets like calendar, announcements
+        - Medium cards (3-4 cols): Interactive widgets like check-in, tasks
+        - Small cards (2-3 cols): Compact info widgets like profile, team status
+      */}
+      <div className="bento-grid">
+        {/* Row 1: Primary Daily Actions & Overview */}
+
+        {/* Monthly Attendance - Needs space for calendar grid */}
+        <div className="col-span-1 md:col-span-6 lg:col-span-5">
+          <MonthlyAttendancePreviewCard />
         </div>
 
-        {/* Recent Activity */}
-        <div className="lg:col-span-2">
-          <RecentActivity 
-            title="Recent Activity" 
+        {/* Check In/Out - Important daily actions */}
+        <div className="col-span-1 md:col-span-3 lg:col-span-4">
+          <CheckInOutCard />
+        </div>
+
+        {/* Your Info - Compact profile information */}
+        <div className="col-span-1 md:col-span-3 lg:col-span-3">
+          <YourInfoCard />
+        </div>
+
+        {/* Row 2: Information-Dense Cards */}
+
+        {/* Announcements - Multiple items, needs reading space */}
+        <div className="col-span-1 md:col-span-6 lg:col-span-6">
+          <AnnouncementsCard />
+        </div>
+
+        {/* Leave Report - Charts and data visualization */}
+        <div className="col-span-1 md:col-span-6 lg:col-span-6">
+          <LeaveReportCard />
+        </div>
+
+        {/* Row 3: Secondary Information & Team Awareness */}
+
+        {/* Holidays & Upcoming Leaves */}
+        <div className="col-span-1 md:col-span-3 lg:col-span-4">
+          <HolidaysUpcomingLeavesCard />
+        </div>
+
+        {/* Pending Tasks */}
+        <div className="col-span-1 md:col-span-3 lg:col-span-4">
+          <PendingTasksCard />
+        </div>
+
+        {/* On Leave Today - Team awareness */}
+        <div className="col-span-1 md:col-span-6 lg:col-span-4">
+          <OnLeaveTodayCard />
+        </div>
+      </div>
+
+      {/* Secondary Content - Quick Actions & Activity */}
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-6 lg:grid-cols-12 mt-6">
+        <div className="col-span-1 md:col-span-2 lg:col-span-4">
+          <QuickActions title="Quick Actions" actions={quickActions} />
+        </div>
+        <div className="col-span-1 md:col-span-4 lg:col-span-8">
+          <RecentActivity
+            title="Recent Activity"
             activities={mockActivities}
             maxItems={6}
           />
@@ -153,7 +278,7 @@ export function EmployeeDashboard() {
       </div>
 
       {/* Personal Insights */}
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-3 lg:grid-cols-3">
         {/* This Month Summary */}
         <div className="space-y-4">
           <h3 className="text-lg font-semibold">This Month</h3>
@@ -204,27 +329,21 @@ export function EmployeeDashboard() {
           </div>
         </div>
 
-        {/* Goals & Development */}
+        {/* Team & Tasks */}
         <div className="space-y-4">
-          <h3 className="text-lg font-semibold">Goals & Development</h3>
+          <h3 className="text-lg font-semibold">Team & Tasks</h3>
           <div className="space-y-3">
             <StatsCard
-              title="OKR Progress"
-              value="80%"
-              description="Q4 objectives"
-              icon={Target}
+              title="On Leave Today"
+              value={todayOnLeave.length}
+              description={todayOnLeave.slice(0,3).map(p => p.name).join(', ') || '—'}
+              icon={Users}
             />
             <StatsCard
-              title="Training Hours"
-              value="12"
-              description="This quarter"
+              title="Pending Tasks"
+              value={pendingTasks}
+              description="Onboarding/assigned tasks"
               icon={FileText}
-            />
-            <StatsCard
-              title="Certifications"
-              value="3"
-              description="Completed this year"
-              icon={User}
             />
           </div>
         </div>

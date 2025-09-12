@@ -330,16 +330,44 @@ export function SalaryStructureBuilder({
                               {payComponent.type}
                             </Badge>
                           )}
+                          {payComponent?.isStatutory && (
+                            <Badge variant="outline" className="text-xs">
+                              Statutory
+                            </Badge>
+                          )}
                         </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => remove(index)}
-                          disabled={isLoading || isSubmitting}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <div className="flex items-center space-x-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => index > 0 && move(index, index - 1)}
+                            disabled={isLoading || isSubmitting || index === 0}
+                            title="Move up"
+                          >
+                            ↑
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => index < fields.length - 1 && move(index, index + 1)}
+                            disabled={isLoading || isSubmitting || index === fields.length - 1}
+                            title="Move down"
+                          >
+                            ↓
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => remove(index)}
+                            disabled={isLoading || isSubmitting}
+                            title="Remove component"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -347,7 +375,12 @@ export function SalaryStructureBuilder({
                           <Label>Pay Component *</Label>
                           <Select
                             value={component?.componentId || ''}
-                            onValueChange={(value) => setValue(`components.${index}.componentId`, value)}
+                            onValueChange={(value) => {
+                              setValue(`components.${index}.componentId`, value)
+                              // Reset values when component changes
+                              setValue(`components.${index}.value`, undefined)
+                              setValue(`components.${index}.percentage`, undefined)
+                            }}
                             disabled={isLoading || isSubmitting}
                           >
                             <SelectTrigger>
@@ -361,6 +394,11 @@ export function SalaryStructureBuilder({
                                     <Badge variant="outline" className="text-xs">
                                       {pc.calculationType}
                                     </Badge>
+                                    {pc.isStatutory && (
+                                      <Badge variant="secondary" className="text-xs">
+                                        Statutory
+                                      </Badge>
+                                    )}
                                   </div>
                                 </SelectItem>
                               ))}
@@ -395,6 +433,8 @@ export function SalaryStructureBuilder({
                                 <Input
                                   type="number"
                                   step="0.01"
+                                  min="0"
+                                  max="100"
                                   placeholder="0.00"
                                   className="pl-10"
                                   value={component?.percentage || ''}
@@ -415,8 +455,9 @@ export function SalaryStructureBuilder({
                                   <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="CTC">CTC</SelectItem>
+                                  <SelectItem value="CTC">CTC (Annual)</SelectItem>
                                   <SelectItem value="BASIC">Basic Salary</SelectItem>
+                                  <SelectItem value="GROSS">Gross Salary</SelectItem>
                                 </SelectContent>
                               </Select>
                             </div>
@@ -452,15 +493,36 @@ export function SalaryStructureBuilder({
                         </div>
                       )}
 
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          checked={component?.isVariable || false}
-                          onCheckedChange={(checked) => setValue(`components.${index}.isVariable`, !!checked)}
-                          disabled={isLoading || isSubmitting}
-                        />
-                        <Label className="text-sm font-normal">
-                          Variable component (can be adjusted per employee)
-                        </Label>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <Checkbox
+                            checked={component?.isVariable || false}
+                            onCheckedChange={(checked) => setValue(`components.${index}.isVariable`, !!checked)}
+                            disabled={isLoading || isSubmitting}
+                          />
+                          <Label className="text-sm font-normal">
+                            Variable component (can be adjusted per employee)
+                          </Label>
+                        </div>
+                        <div className="flex items-center space-x-1">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              const newIndex = fields.length
+                              append({
+                                ...component,
+                                componentId: '',
+                                order: newIndex,
+                              })
+                            }}
+                            disabled={isLoading || isSubmitting}
+                            title="Duplicate component"
+                          >
+                            <Calculator className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
 
                       {payComponent && (

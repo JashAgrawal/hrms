@@ -101,12 +101,15 @@ export async function POST(request: NextRequest) {
       data: {
         employeeId,
         title: file.name,
+        originalName: file.name,
         category: category as any,
         fileName: filename,
         fileUrl: `/uploads/documents/${employeeId}/${filename}`,
         fileSize: file.size,
         mimeType: file.type,
-        uploadedBy: session.user.id
+        uploadedBy: session.user.id,
+        status: 'ACTIVE',
+        approvalStatus: 'PENDING'
       }
     })
 

@@ -10,8 +10,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    // Only admin can view dashboard stats
-    if (session.user.role !== "ADMIN") {
+    // Only admin and HR can view dashboard stats
+    if (!["ADMIN", "HR"].includes(session.user.role)) {
       return NextResponse.json(
         { error: "Insufficient permissions" },
         { status: 403 }

@@ -94,15 +94,16 @@ async function getEmployee(id: string) {
 export default async function EmployeeDetailPage({
   params,
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
-  const session = await auth()
+  const session = await auth();
+  const { id } = await params
   
   if (!session?.user) {
     redirect('/auth/signin')
   }
 
-  const employee = await getEmployee(params.id)
+  const employee = await getEmployee(id)
   
   if (!employee) {
     notFound()
@@ -164,6 +165,7 @@ export default async function EmployeeDetailPage({
         address: employee.address as Record<string, unknown> | undefined,
         basicSalary: employee.basicSalary ? Number(employee.basicSalary) : undefined,
         ctc: employee.ctc ? Number(employee.ctc) : undefined,
+        employeeType: employee.employeeType as string,
         attendanceRecords: employee.attendanceRecords.map(record => ({
           ...record,
           status: record.status as string,

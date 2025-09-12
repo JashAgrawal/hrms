@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { DepartmentSelect } from '@/components/ui/department-select'
+
 import { Badge } from '@/components/ui/badge'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { 
@@ -94,41 +95,32 @@ export function EmployeeAdvancedSearch({ departments }: AdvancedSearchProps) {
   const hasActiveFilters = activeFiltersCount > 0
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <Search className="h-5 w-5" />
-              Employee Search
-            </CardTitle>
-            <CardDescription>
-              Search and filter employees with advanced criteria
-            </CardDescription>
-          </div>
-          <div className="flex items-center gap-2">
-            {hasActiveFilters && (
-              <Badge variant="secondary">
-                {activeFiltersCount} filter{activeFiltersCount !== 1 ? 's' : ''} active
-              </Badge>
-            )}
-            <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
-              <CollapsibleTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Filter className="mr-2 h-4 w-4" />
-                  Advanced
-                  {isExpanded ? (
-                    <ChevronUp className="ml-2 h-4 w-4" />
-                  ) : (
-                    <ChevronDown className="ml-2 h-4 w-4" />
-                  )}
-                </Button>
-              </CollapsibleTrigger>
-            </Collapsible>
-          </div>
+    <div className="space-y-4">
+      {/* Search Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Search className="h-5 w-5 text-muted-foreground" />
+          <span className="font-medium">Search & Filter</span>
+          {hasActiveFilters && (
+            <Badge variant="secondary">
+              {activeFiltersCount} filter{activeFiltersCount !== 1 ? 's' : ''} active
+            </Badge>
+          )}
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+        <Collapsible open={isExpanded} onOpenChange={setIsExpanded}>
+          <CollapsibleTrigger asChild>
+            <Button variant="outline" size="sm">
+              <Filter className="mr-2 h-4 w-4" />
+              Advanced
+              {isExpanded ? (
+                <ChevronUp className="ml-2 h-4 w-4" />
+              ) : (
+                <ChevronDown className="ml-2 h-4 w-4" />
+              )}
+            </Button>
+          </CollapsibleTrigger>
+        </Collapsible>
+      </div>
         {/* Basic Search */}
         <div className="flex gap-2">
           <div className="relative flex-1">
@@ -158,19 +150,15 @@ export function EmployeeAdvancedSearch({ departments }: AdvancedSearchProps) {
 
         {/* Quick Filters */}
         <div className="flex flex-wrap gap-2">
-          <Select value={filters.department} onValueChange={(value) => updateFilter('department', value)}>
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Department" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">All departments</SelectItem>
-              {departments.map((dept) => (
-                <SelectItem key={dept.id} value={dept.id}>
-                  {dept.name} ({dept._count.employees})
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <DepartmentSelect
+            departments={departments}
+            value={filters.department}
+            onValueChange={(value) => updateFilter('department', value)}
+            placeholder="Department"
+            className="w-[180px]"
+            showEmployeeCount={true}
+            allowClear={true}
+          />
 
           <Select value={filters.status} onValueChange={(value) => updateFilter('status', value)}>
             <SelectTrigger className="w-[140px]">
@@ -329,7 +317,6 @@ export function EmployeeAdvancedSearch({ departments }: AdvancedSearchProps) {
             })}
           </div>
         )}
-      </CardContent>
-    </Card>
+    </div>
   )
 }

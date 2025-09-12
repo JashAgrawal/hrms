@@ -1,15 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { payslipService, payslipGenerator } from '@/lib/payslip-service'
+import { payslipService } from '@/lib/payslip-service'
 import { emailService } from '@/lib/email-service'
 import { z } from 'zod'
 
 const distributePayslipsSchema = z.object({
   payrollRunId: z.string(),
-  employeeIds: z.array(z.string()).optional(),
-  emailSubject: z.string().optional(),
-  emailMessage: z.string().optional(),
+  employeeIds: z.array(z.string()).optional(), // If not provided, send to all employees
+  customSubject: z.string().optional(),
+  customMessage: z.string().optional(),
+  batchSize: z.number().min(1).max(20).default(5), // Smaller batch size for email distribution
+  delayBetweenBatches: z.number().min(100).max(5000).default(1000), // Delay in milliseconds
 })
 
 export async function POST(request: NextRequest) {
@@ -19,29 +21,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check if user has permission to distribute payslips
+    // Check permissions
     if (!['ADMIN', 'HR', 'FINANCE'].includes(session.user.role)) {
       return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
     }
 
     const body = await request.json()
-    const validatedData = distributePayslipsSchema.parse(body)
+    const { 
+      payrollRunId, 
+      employeeIds, 
+      customSubject, 
+      customMessage,
+      batchSize,
+      delayBetweenBatches 
+    } = distributePayslipsSchema.parse(body)
 
+    // Get payroll run and payslips
     const payrollRun = await prisma.payrollRun.findUnique({
-      where: { id: validatedData.payrollRunId },
+      where: { id: payrollRunId },
       include: {
-        payrollRecords: {
-          where: {
-            status: { in: ['APPROVED', 'PAID'] },
-            ...(validatedData.employeeIds && {
-              employeeId: { in: validatedData.employeeIds },
-            }),
-          },
+        payslips: {
+          where: employeeIds ? { employeeId: { in: employeeIds } } : {},
           include: {
             employee: {
-              include: {
-                department: true,
+              select: {
+                id: true,
+                employeeCode: true,
+                firstName: true,
+                lastName: true,
+                email: true,
               },
+            },
+          },
+          orderBy: {
+            employee: {
+              employeeCode: 'asc',
             },
           },
         },
@@ -52,132 +66,106 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Payroll run not found' }, { status: 404 })
     }
 
-    if (payrollRun.payrollRecords.length === 0) {
+    if (payrollRun.payslips.length === 0) {
       return NextResponse.json(
-        { error: 'No approved payroll records found for distribution' },
+        { error: 'No payslips found for distribution' },
         { status: 400 }
       )
     }
 
     const results = {
-      total: payrollRun.payrollRecords.length,
-      sent: 0,
-      failed: 0,
+      totalPayslips: payrollRun.payslips.length,
+      emailsSent: 0,
+      emailsFailed: 0,
       errors: [] as string[],
+      distributionDetails: [] as any[],
     }
 
-    // Process each employee's payslip
-    for (const record of payrollRun.payrollRecords) {
-      try {
-        // Check if payslip already exists
-        let payslip = await prisma.payslip.findFirst({
-          where: {
-            employeeId: record.employeeId,
-            payrollRunId: validatedData.payrollRunId,
-          },
-        })
+    // Process payslips in batches
+    for (let i = 0; i < payrollRun.payslips.length; i += batchSize) {
+      const batch = payrollRun.payslips.slice(i, i + batchSize)
+      
+      const batchPromises = batch.map(async (payslip) => {
+        const employee = payslip.employee
+        const employeeName = `${employee.firstName} ${employee.lastName}`
+        
+        try {
+          // Get payslip data and generate PDF
+          const payslipData = await payslipService.getPayslipData(payslip.id)
+          const payslipBuffer = await payslipService.generatePayslipPDF(payslipData)
+          
+          // Send email
+          const emailSent = await emailService.sendPayslipEmail({
+            employeeEmail: employee.email,
+            employeeName,
+            period: payrollRun.period,
+            payslipBuffer,
+            payslipFileName: payslip.fileName,
+            customSubject,
+            customMessage,
+          })
 
-        // Generate payslip if it doesn't exist
-        if (!payslip) {
-          const company = await getCompanyInfo()
-          const payslipData = {
-            employee: {
-              id: record.employee.id,
-              employeeCode: record.employee.employeeCode,
-              firstName: record.employee.firstName,
-              lastName: record.employee.lastName,
-              email: record.employee.email,
-              designation: record.employee.designation || 'N/A',
-              joiningDate: record.employee.joiningDate?.toISOString() || '',
-              department: {
-                name: record.employee.department?.name || 'N/A',
-                code: record.employee.department?.code || 'N/A',
+          if (emailSent) {
+            // Update payslip record
+            await prisma.payslip.update({
+              where: { id: payslip.id },
+              data: {
+                emailSent: true,
+                emailSentAt: new Date(),
               },
-            },
-            payrollRun: {
-              id: payrollRun.id,
-              period: payrollRun.period,
-              startDate: payrollRun.startDate.toISOString(),
-              endDate: payrollRun.endDate.toISOString(),
-            },
-            payrollRecord: {
-              id: record.id,
-              basicSalary: Number(record.basicSalary),
-              grossSalary: Number(record.grossSalary),
-              netSalary: Number(record.netSalary),
-              totalEarnings: Number(record.totalEarnings),
-              totalDeductions: Number(record.totalDeductions),
-              workingDays: record.workingDays,
-              presentDays: Number(record.presentDays),
-              absentDays: Number(record.absentDays),
-              lopDays: record.lopDays ? Number(record.lopDays) : undefined,
-              lopAmount: record.lopAmount ? Number(record.lopAmount) : undefined,
-              overtimeHours: record.overtimeHours ? Number(record.overtimeHours) : undefined,
-              overtimeAmount: record.overtimeAmount ? Number(record.overtimeAmount) : undefined,
-              pfDeduction: record.pfDeduction ? Number(record.pfDeduction) : undefined,
-              esiDeduction: record.esiDeduction ? Number(record.esiDeduction) : undefined,
-              tdsDeduction: record.tdsDeduction ? Number(record.tdsDeduction) : undefined,
-              ptDeduction: record.ptDeduction ? Number(record.ptDeduction) : undefined,
-              earnings: (record.earnings as any[]) || [],
-              deductions: (record.deductions as any[]) || [],
-            },
-            company,
+            })
+
+            results.emailsSent++
+            results.distributionDetails.push({
+              employeeCode: employee.employeeCode,
+              employeeName,
+              email: employee.email,
+              status: 'sent',
+              sentAt: new Date(),
+            })
+          } else {
+            results.emailsFailed++
+            results.errors.push(`Failed to send email to ${employee.employeeCode} (${employee.email})`)
+            results.distributionDetails.push({
+              employeeCode: employee.employeeCode,
+              employeeName,
+              email: employee.email,
+              status: 'failed',
+              error: 'Email sending failed',
+            })
           }
-
-          const buffer = await payslipGenerator.generatePayslip(payslipData)
-          const fileName = `payslip_${record.employee.employeeCode}_${payrollRun.period}.pdf`
-
-          payslip = await prisma.payslip.create({
-            data: {
-              employeeId: record.employeeId,
-              payrollRunId: validatedData.payrollRunId,
-              fileName,
-              fileSize: buffer.length,
-              generatedBy: session.user.id,
-              status: 'GENERATED',
-            },
+        } catch (error) {
+          results.emailsFailed++
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          results.errors.push(`Error processing ${employee.employeeCode}: ${errorMessage}`)
+          results.distributionDetails.push({
+            employeeCode: employee.employeeCode,
+            employeeName,
+            email: employee.email,
+            status: 'error',
+            error: errorMessage,
           })
         }
+      })
 
-        // Generate payslip buffer for email
-        const payslipData = await getPayslipDataForRecord(record, payrollRun)
-        const payslipBuffer = await payslipGenerator.generatePayslip(payslipData)
-
-        // Send email with payslip attachment
-        const emailSent = await emailService.sendPayslipEmail({
-          employeeEmail: record.employee.email,
-          employeeName: `${record.employee.firstName} ${record.employee.lastName}`,
-          period: payrollRun.period,
-          payslipBuffer,
-          payslipFileName: payslip.fileName,
-          customSubject: validatedData.emailSubject,
-          customMessage: validatedData.emailMessage,
-        })
-
-        if (emailSent) {
-          // Update payslip status
-          await prisma.payslip.update({
-            where: { id: payslip.id },
-            data: {
-              emailSent: true,
-              emailSentAt: new Date(),
-              status: 'SENT',
-            },
-          })
-          results.sent++
-        } else {
-          results.failed++
-          results.errors.push(`Failed to send email to ${record.employee.email}`)
-        }
-      } catch (error) {
-        console.error(`Error processing payslip for employee ${record.employee.employeeCode}:`, error)
-        results.failed++
-        results.errors.push(`Error processing ${record.employee.employeeCode}: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      await Promise.all(batchPromises)
+      
+      // Add delay between batches to avoid overwhelming email service
+      if (i + batchSize < payrollRun.payslips.length) {
+        await new Promise(resolve => setTimeout(resolve, delayBetweenBatches))
       }
     }
 
+    // Log the distribution activity
+    console.log(`📧 Payslip distribution completed for payroll run ${payrollRunId}:`, {
+      totalPayslips: results.totalPayslips,
+      emailsSent: results.emailsSent,
+      emailsFailed: results.emailsFailed,
+      successRate: `${((results.emailsSent / results.totalPayslips) * 100).toFixed(1)}%`,
+    })
+
     return NextResponse.json({
-      message: 'Payslip distribution completed',
+      message: `Payslip distribution completed. ${results.emailsSent} sent, ${results.emailsFailed} failed.`,
       results,
     })
   } catch (error) {
@@ -196,63 +184,81 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function getPayslipDataForRecord(record: any, payrollRun: any) {
-  const company = await getCompanyInfo()
-  
-  return {
-    employee: {
-      id: record.employee.id,
-      employeeCode: record.employee.employeeCode,
-      firstName: record.employee.firstName,
-      lastName: record.employee.lastName,
-      email: record.employee.email,
-      designation: record.employee.designation || 'N/A',
-      joiningDate: record.employee.joiningDate?.toISOString() || '',
-      department: {
-        name: record.employee.department?.name || 'N/A',
-        code: record.employee.department?.code || 'N/A',
-      },
-    },
-    payrollRun: {
-      id: payrollRun.id,
-      period: payrollRun.period,
-      startDate: payrollRun.startDate.toISOString(),
-      endDate: payrollRun.endDate.toISOString(),
-    },
-    payrollRecord: {
-      id: record.id,
-      basicSalary: Number(record.basicSalary),
-      grossSalary: Number(record.grossSalary),
-      netSalary: Number(record.netSalary),
-      totalEarnings: Number(record.totalEarnings),
-      totalDeductions: Number(record.totalDeductions),
-      workingDays: record.workingDays,
-      presentDays: Number(record.presentDays),
-      absentDays: Number(record.absentDays),
-      lopDays: record.lopDays ? Number(record.lopDays) : undefined,
-      lopAmount: record.lopAmount ? Number(record.lopAmount) : undefined,
-      overtimeHours: record.overtimeHours ? Number(record.overtimeHours) : undefined,
-      overtimeAmount: record.overtimeAmount ? Number(record.overtimeAmount) : undefined,
-      pfDeduction: record.pfDeduction ? Number(record.pfDeduction) : undefined,
-      esiDeduction: record.esiDeduction ? Number(record.esiDeduction) : undefined,
-      tdsDeduction: record.tdsDeduction ? Number(record.tdsDeduction) : undefined,
-      ptDeduction: record.ptDeduction ? Number(record.ptDeduction) : undefined,
-      earnings: (record.earnings as any[]) || [],
-      deductions: (record.deductions as any[]) || [],
-    },
-    company,
-  }
-}
+// GET endpoint to check distribution status
+export async function GET(request: NextRequest) {
+  try {
+    const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-async function getCompanyInfo() {
-  return {
-    name: 'Pekka HR Solutions',
-    address: '123 Business Park, Tech City',
-    city: 'Bangalore',
-    state: 'Karnataka',
-    pincode: '560001',
-    panNumber: 'ABCDE1234F',
-    pfNumber: 'KA/BGE/12345',
-    esiNumber: '12345678901234567',
+    // Check permissions
+    if (!['ADMIN', 'HR', 'FINANCE'].includes(session.user.role)) {
+      return NextResponse.json({ error: 'Insufficient permissions' }, { status: 403 })
+    }
+
+    const { searchParams } = new URL(request.url)
+    const payrollRunId = searchParams.get('payrollRunId')
+
+    if (!payrollRunId) {
+      return NextResponse.json({ error: 'Payroll run ID is required' }, { status: 400 })
+    }
+
+    const distributionStatus = await prisma.payslip.groupBy({
+      by: ['emailSent'],
+      where: { payrollRunId },
+      _count: {
+        id: true,
+      },
+    })
+
+    const totalPayslips = distributionStatus.reduce((sum, group) => sum + group._count.id, 0)
+    const emailsSent = distributionStatus.find(group => group.emailSent)?._count.id || 0
+    const emailsPending = distributionStatus.find(group => !group.emailSent)?._count.id || 0
+
+    const recentDistributions = await prisma.payslip.findMany({
+      where: {
+        payrollRunId,
+        emailSent: true,
+        emailSentAt: {
+          not: null,
+        },
+      },
+      include: {
+        employee: {
+          select: {
+            employeeCode: true,
+            firstName: true,
+            lastName: true,
+            email: true,
+          },
+        },
+      },
+      orderBy: {
+        emailSentAt: 'desc',
+      },
+      take: 10,
+    })
+
+    return NextResponse.json({
+      distributionStatus: {
+        totalPayslips,
+        emailsSent,
+        emailsPending,
+        distributionRate: totalPayslips > 0 ? ((emailsSent / totalPayslips) * 100).toFixed(1) : '0',
+      },
+      recentDistributions: recentDistributions.map(payslip => ({
+        employeeCode: payslip.employee.employeeCode,
+        employeeName: `${payslip.employee.firstName} ${payslip.employee.lastName}`,
+        email: payslip.employee.email,
+        sentAt: payslip.emailSentAt,
+      })),
+    })
+  } catch (error) {
+    console.error('Error fetching distribution status:', error)
+    return NextResponse.json(
+      { error: 'Failed to fetch distribution status' },
+      { status: 500 }
+    )
   }
 }

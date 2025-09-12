@@ -9,7 +9,9 @@ import {
   Users, 
   Settings,
   Search,
-  Filter
+  Filter,
+  UserPlus,
+  X
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -47,12 +49,37 @@ interface LocationFormData {
   workingHours?: any
 }
 
+interface Employee {
+  id: string
+  firstName: string
+  lastName: string
+  employeeCode: string
+  designation: string
+  department: {
+    name: string
+  }
+}
+
+interface EmployeeLocation {
+  id: string
+  employee: Employee
+  isActive: boolean
+  assignedAt: string
+  assignedBy: string
+}
+
 export default function LocationsPage() {
   const [locations, setLocations] = useState<Location[]>([])
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [showCreateDialog, setShowCreateDialog] = useState(false)
   const [editingLocation, setEditingLocation] = useState<Location | null>(null)
+  const [showAssignDialog, setShowAssignDialog] = useState(false)
+  const [selectedLocation, setSelectedLocation] = useState<Location | null>(null)
+  const [employees, setEmployees] = useState<Employee[]>([])
+  const [assignedEmployees, setAssignedEmployees] = useState<EmployeeLocation[]>([])
+  const [selectedEmployees, setSelectedEmployees] = useState<string[]>([])
+  const [loadingEmployees, setLoadingEmployees] = useState(false)
   const [formData, setFormData] = useState<LocationFormData>({
     name: '',
     address: '',
@@ -74,7 +101,14 @@ export default function LocationsPage() {
       
       if (response.ok) {
         const data = await response.json()
-        setLocations(data.locations)
+        // Normalize numeric fields that might arrive as strings/null
+        const normalized = (data.locations || []).map((loc: any) => ({
+          ...loc,
+          latitude: typeof loc?.latitude === 'string' ? parseFloat(loc.latitude) : loc?.latitude ?? 0,
+          longitude: typeof loc?.longitude === 'string' ? parseFloat(loc.longitude) : loc?.longitude ?? 0,
+          radius: typeof loc?.radius === 'string' ? parseInt(loc.radius, 10) : loc?.radius ?? 0,
+        }))
+        setLocations(normalized)
       } else {
         throw new Error('Failed to fetch locations')
       }
@@ -170,6 +204,108 @@ export default function LocationsPage() {
     location.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     location.address?.toLowerCase().includes(searchTerm.toLowerCase())
   )
+
+  const formatCoordinate = (value: unknown) => {
+    const numberValue = typeof value === 'string' ? parseFloat(value) : typeof value === 'number' ? value : NaN
+    return Number.isFinite(numberValue) ? numberValue.toFixed(6) : 'N/A'
+  }
+
+  const fetchEmployees = async () => {
+    try {
+      setLoadingEmployees(true)
+      const response = await fetch('/api/employees')
+      
+      if (response.ok) {
+        const data = await response.json()
+        setEmployees(data.employees || [])
+      } else {
+        throw new Error('Failed to fetch employees')
+      }
+    } catch (error) {
+      console.error('Error fetching employees:', error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch employees",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingEmployees(false)
+    }
+  }
+
+  const fetchAssignedEmployees = async (locationId: string) => {
+    try {
+      setLoadingEmployees(true)
+      const response = await fetch(`/api/locations/${locationId}/employees`)
+      
+      if (response.ok) {
+        const data = await response.json()
+        setAssignedEmployees(data.employees || [])
+      } else {
+        throw new Error('Failed to fetch assigned employees')
+      }
+    } catch (error) {
+      console.error('Error fetching assigned employees:', error)
+      toast({
+        title: "Error",
+        description: "Failed to fetch assigned employees",
+        variant: "destructive",
+      })
+    } finally {
+      setLoadingEmployees(false)
+    }
+  }
+
+  const handleOpenAssignDialog = (location: Location) => {
+    setSelectedLocation(location)
+    setSelectedEmployees([])
+    setShowAssignDialog(true)
+    fetchEmployees()
+    fetchAssignedEmployees(location.id)
+  }
+
+  const handleToggleEmployeeSelection = (employeeId: string) => {
+    setSelectedEmployees(prev => 
+      prev.includes(employeeId)
+        ? prev.filter(id => id !== employeeId)
+        : [...prev, employeeId]
+    )
+  }
+
+  const handleAssignEmployees = async () => {
+    if (!selectedLocation) return
+    
+    try {
+      const response = await fetch(`/api/locations/${selectedLocation.id}/employees`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          employeeIds: selectedEmployees,
+        }),
+      })
+
+      if (response.ok) {
+        toast({
+          title: "Success",
+          description: "Employees assigned successfully",
+        })
+        setShowAssignDialog(false)
+        fetchLocations() // Refresh the locations to update the employee count
+      } else {
+        const error = await response.json()
+        throw new Error(error.error || 'Failed to assign employees')
+      }
+    } catch (error) {
+      console.error('Error assigning employees:', error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to assign employees",
+        variant: "destructive",
+      })
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -350,7 +486,7 @@ export default function LocationsPage() {
                   <div>
                     <span className="text-gray-500">Coordinates:</span>
                     <p className="font-mono text-xs">
-                      {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+                      {formatCoordinate(location.latitude)}, {formatCoordinate(location.longitude)}
                     </p>
                   </div>
                   <div>
@@ -366,6 +502,14 @@ export default function LocationsPage() {
                   </div>
                   
                   <div className="flex items-center gap-2">
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => handleOpenAssignDialog(location)}
+                      title="Assign Employees"
+                    >
+                      <UserPlus className="h-4 w-4" />
+                    </Button>
                     <Button variant="ghost" size="sm">
                       <Edit className="h-4 w-4" />
                     </Button>
@@ -404,6 +548,135 @@ export default function LocationsPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* Employee Assignment Dialog */}
+      <Dialog open={showAssignDialog} onOpenChange={setShowAssignDialog}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>Assign Employees to {selectedLocation?.name}</DialogTitle>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-hidden flex flex-col">
+            {/* Currently Assigned Employees */}
+            <div className="mb-4">
+              <h4 className="text-sm font-medium mb-2">Currently Assigned ({assignedEmployees.length})</h4>
+              {assignedEmployees.length === 0 ? (
+                <p className="text-sm text-gray-500">No employees assigned to this location yet.</p>
+              ) : (
+                <div className="space-y-2 max-h-32 overflow-y-auto">
+                  {assignedEmployees.map((assignment) => (
+                    <div key={assignment.id} className="flex items-center justify-between p-2 bg-gray-50 rounded">
+                      <div>
+                        <span className="font-medium">
+                          {assignment.employee.firstName} {assignment.employee.lastName}
+                        </span>
+                        <span className="text-sm text-gray-500 ml-2">
+                          ({assignment.employee.employeeCode})
+                        </span>
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="text-red-600 hover:text-red-700"
+                        onClick={async () => {
+                          // Handle remove assignment
+                          try {
+                            const response = await fetch(`/api/locations/${selectedLocation?.id}/employees/${assignment.employee.id}`, {
+                              method: 'DELETE'
+                            })
+                            if (response.ok) {
+                              fetchAssignedEmployees(selectedLocation!.id)
+                              fetchLocations()
+                              toast({
+                                title: "Success",
+                                description: "Employee removed from location",
+                              })
+                            }
+                          } catch (error) {
+                            toast({
+                              title: "Error",
+                              description: "Failed to remove employee",
+                              variant: "destructive",
+                            })
+                          }
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Available Employees */}
+            <div className="flex-1 min-h-0">
+              <h4 className="text-sm font-medium mb-2">Available Employees</h4>
+              
+              {loadingEmployees ? (
+                <div className="flex justify-center items-center h-32">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : (
+                <div className="border rounded-md max-h-64 overflow-y-auto">
+                  {employees
+                    .filter(emp => !assignedEmployees.some(assigned => assigned.employee.id === emp.id))
+                    .map((employee) => (
+                    <label
+                      key={employee.id}
+                      className="flex items-center p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedEmployees.includes(employee.id)}
+                        onChange={() => handleToggleEmployeeSelection(employee.id)}
+                        className="mr-3"
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">
+                          {employee.firstName} {employee.lastName}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {employee.employeeCode} • {employee.designation}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {employee.department.name}
+                        </div>
+                      </div>
+                    </label>
+                  ))}
+                  
+                  {employees.filter(emp => !assignedEmployees.some(assigned => assigned.employee.id === emp.id)).length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      All employees are already assigned to this location
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex justify-between items-center pt-4 border-t">
+            <span className="text-sm text-gray-500">
+              {selectedEmployees.length} employee(s) selected
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setShowAssignDialog(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAssignEmployees}
+                disabled={selectedEmployees.length === 0}
+              >
+                Assign Selected
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

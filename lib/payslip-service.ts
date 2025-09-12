@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import puppeteer from 'puppeteer';
 
 export interface PayslipData {
   employee: {
@@ -744,13 +745,48 @@ export class PayslipService {
   }
 
   /**
-   * Generate payslip PDF buffer
+   * Generate payslip PDF buffer using Puppeteer
+   */
+  async generatePayslipPDF(payslipData: PayslipData): Promise<Buffer> {
+    const template = this.generatePayslipTemplate(payslipData);
+    const html = this.generatePayslipHTML(template);
+    
+    let browser;
+    try {
+      browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      });
+      
+      const page = await browser.newPage();
+      await page.setContent(html, { waitUntil: 'networkidle0' });
+      
+      const pdfBuffer = await page.pdf({
+        format: 'A4',
+        printBackground: true,
+        margin: {
+          top: '20px',
+          right: '20px',
+          bottom: '20px',
+          left: '20px'
+        }
+      });
+      
+      return Buffer.from(pdfBuffer);
+    } finally {
+      if (browser) {
+        await browser.close();
+      }
+    }
+  }
+
+  /**
+   * Generate payslip HTML buffer (for backward compatibility)
    */
   async generatePayslip(payslipData: PayslipData): Promise<Buffer> {
     const template = this.generatePayslipTemplate(payslipData);
     const html = this.generatePayslipHTML(template);
     
-    // For now, return HTML as buffer - in production, use puppeteer or similar to generate PDF
     return Buffer.from(html, 'utf-8');
   }
 

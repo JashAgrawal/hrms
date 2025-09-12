@@ -39,7 +39,7 @@ interface DocumentFile {
 }
 
 interface DocumentUploadProps {
-  employeeId: string
+  employeeId?: string
   existingDocuments?: DocumentFile[]
   onDocumentsChange?: (documents: DocumentFile[]) => void
   categories?: { value: string; label: string; required?: boolean }[]
@@ -133,7 +133,9 @@ export function DocumentUpload({
       if (document.file) {
         formData.append('file', document.file)
         formData.append('category', document.category)
-        formData.append('employeeId', employeeId)
+        if (employeeId) {
+          formData.append('employeeId', employeeId)
+        }
       }
 
       const response = await fetch('/api/documents/upload', {

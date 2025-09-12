@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { DollarSign, Plus, Search, Edit, Trash2, Calculator } from 'lucide-react'
+import { DollarSign, Plus, Search, Edit, Trash2, Calculator, TestTube } from 'lucide-react'
+import { SalaryStructureTest } from '@/components/payroll/salary-structure-test'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -20,6 +21,7 @@ interface SalaryComponent {
   code: string
   type: 'EARNING' | 'DEDUCTION'
   calculationType: 'FIXED' | 'PERCENTAGE' | 'FORMULA'
+  category?: 'BASIC' | 'ALLOWANCE' | 'BONUS' | 'OVERTIME' | 'STATUTORY_DEDUCTION' | 'OTHER_DEDUCTION' | 'REIMBURSEMENT'
   value?: number
   formula?: string
   description?: string
@@ -46,10 +48,11 @@ export default function SalaryStructurePage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isStructureDialogOpen, setIsStructureDialogOpen] = useState(false)
   const [isComponentDialogOpen, setIsComponentDialogOpen] = useState(false)
+  const [isAssignDialogOpen, setIsAssignDialogOpen] = useState(false)
   const [editingStructure, setEditingStructure] = useState<SalaryStructure | null>(null)
   const [editingComponent, setEditingComponent] = useState<SalaryComponent | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'structures' | 'components'>('structures')
+  const [activeTab, setActiveTab] = useState<'structures' | 'components' | 'test'>('structures')
 
   const [structureFormData, setStructureFormData] = useState({
     name: '',
@@ -61,24 +64,19 @@ export default function SalaryStructurePage() {
     name: '',
     code: '',
     type: 'EARNING' as 'EARNING' | 'DEDUCTION',
+    category: 'BASIC' as 'BASIC' | 'ALLOWANCE' | 'BONUS' | 'OVERTIME' | 'STATUTORY_DEDUCTION' | 'OTHER_DEDUCTION' | 'REIMBURSEMENT',
     calculationType: 'FIXED' as 'FIXED' | 'PERCENTAGE' | 'FORMULA',
-    value: 0,
     formula: '',
     description: '',
     isStatutory: false
   })
 
-  if (status === 'loading') {
-    return <div>Loading...</div>
-  }
-
-  if (!session?.user) {
-    redirect('/auth/signin')
-  }
-
-  if (!['ADMIN', 'HR', 'FINANCE'].includes(session.user.role)) {
-    redirect('/dashboard')
-  }
+  const [assignForm, setAssignForm] = useState({
+    employeeId: '',
+    structureId: '',
+    ctc: '',
+    effectiveFrom: new Date().toISOString().split('T')[0]
+  })
 
   useEffect(() => {
     fetchData()
@@ -92,70 +90,66 @@ export default function SalaryStructurePage() {
     setFilteredStructures(filtered)
   }, [structures, searchTerm])
 
+  if (status === 'loading') {
+    return <div>Loading...</div>
+  }
+
+  if (!session?.user) {
+    redirect('/auth/signin')
+  }
+
+  if (!['ADMIN', 'HR', 'FINANCE'].includes(session.user.role)) {
+    redirect('/dashboard')
+  }
+
   const fetchData = async () => {
     try {
       setIsLoading(true)
-      // Mock data for now - replace with actual API calls
-      const mockComponents: SalaryComponent[] = [
-        {
-          id: '1',
-          name: 'Basic Salary',
-          code: 'BASIC',
-          type: 'EARNING',
-          calculationType: 'FIXED',
-          value: 50000,
-          description: 'Base salary component',
-          isStatutory: false,
-          isActive: true,
-          order: 1
-        },
-        {
-          id: '2',
-          name: 'House Rent Allowance',
-          code: 'HRA',
-          type: 'EARNING',
-          calculationType: 'PERCENTAGE',
-          value: 40,
-          description: '40% of basic salary',
-          isStatutory: false,
-          isActive: true,
-          order: 2
-        },
-        {
-          id: '3',
-          name: 'Provident Fund',
-          code: 'PF',
-          type: 'DEDUCTION',
-          calculationType: 'PERCENTAGE',
-          value: 12,
-          description: '12% of basic salary',
-          isStatutory: true,
-          isActive: true,
-          order: 3
-        }
-      ]
+      const [componentsRes, structuresRes] = await Promise.all([
+        fetch('/api/payroll/pay-components'),
+        fetch('/api/payroll/salary-structures')
+      ])
 
-      const mockStructures: SalaryStructure[] = [
-        {
-          id: '1',
-          name: 'Standard Structure',
-          description: 'Default salary structure for all employees',
-          components: mockComponents,
-          isActive: true,
-          createdAt: '2024-01-01'
-        },
-        {
-          id: '2',
-          name: 'Executive Structure',
-          description: 'Salary structure for executive level employees',
-          components: mockComponents.slice(0, 2),
-          isActive: true,
-          createdAt: '2024-01-01'
-        }
-      ]
+      if (componentsRes.ok) {
+        const comps = await componentsRes.json()
+        setComponents(comps.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          code: c.code,
+          type: c.type,
+          calculationType: c.calculationType,
+          category: c.category,
+          value: undefined,
+          description: c.description,
+          isStatutory: c.isStatutory,
+          isActive: c.isActive,
+          order: 0
+        })))
+      }
 
-      setComponents(mockComponents)
-      setStructures(mockStructures)
+      if (structuresRes.ok) {
+        const structs = await structuresRes.json()
+        setStructures(structs.map((s: any) => ({
+          id: s.id,
+          name: s.name,
+          description: s.description,
+          components: s.components.map((sc: any) => ({
+            id: sc.component.id,
+            name: sc.component.name,
+            code: sc.component.code,
+            type: sc.component.type,
+            calculationType: sc.component.calculationType,
+            category: sc.component.category,
+            value: sc.value || sc.percentage || 0,
+            description: sc.component.description,
+            isStatutory: sc.component.isStatutory,
+            isActive: true,
+            order: sc.order
+          })),
+          isActive: s.isActive,
+          createdAt: s.createdAt
+        })))
+      }
     } catch (error) {
       console.error('Error fetching data:', error)
       setError('Failed to fetch salary structures')
@@ -168,14 +162,38 @@ export default function SalaryStructurePage() {
     e.preventDefault()
     try {
       setError(null)
-      // Mock API call - replace with actual implementation
-      console.log('Saving structure:', structureFormData)
+
+      const method = editingStructure ? 'PUT' : 'POST'
+      const url = editingStructure
+        ? `/api/payroll/salary-structures/${editingStructure.id}`
+        : '/api/payroll/salary-structures'
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: structureFormData.name,
+          code: structureFormData.name.toUpperCase().replace(/\s+/g, '_'),
+          description: structureFormData.description || undefined,
+          components: structureFormData.componentIds.map((componentId, index) => ({
+            componentId,
+            order: index,
+            isVariable: false
+          }))
+        })
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to save salary structure')
+      }
+
       await fetchData()
       setIsStructureDialogOpen(false)
       setEditingStructure(null)
       resetStructureForm()
     } catch (error) {
-      setError('Failed to save salary structure')
+      setError(error instanceof Error ? error.message : 'Failed to save salary structure')
     }
   }
 
@@ -183,8 +201,25 @@ export default function SalaryStructurePage() {
     e.preventDefault()
     try {
       setError(null)
-      // Mock API call - replace with actual implementation
-      console.log('Saving component:', componentFormData)
+      const res = await fetch('/api/payroll/pay-components', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: componentFormData.name,
+          code: componentFormData.code.toUpperCase(),
+          type: componentFormData.type,
+          category: componentFormData.category,
+          calculationType: componentFormData.calculationType,
+          isStatutory: componentFormData.isStatutory,
+          isTaxable: true,
+          description: componentFormData.description || undefined,
+          formula: componentFormData.calculationType === 'FORMULA' ? (componentFormData.formula || '') : undefined,
+        })
+      })
+      if (!res.ok) {
+        const err = await res.json()
+        throw new Error(err.error || 'Failed to create component')
+      }
       await fetchData()
       setIsComponentDialogOpen(false)
       setEditingComponent(null)
@@ -205,8 +240,8 @@ export default function SalaryStructurePage() {
       name: '',
       code: '',
       type: 'EARNING',
+      category: 'BASIC',
       calculationType: 'FIXED',
-      value: 0,
       formula: '',
       description: '',
       isStatutory: false
@@ -231,8 +266,8 @@ export default function SalaryStructurePage() {
       name: component.name,
       code: component.code,
       type: component.type,
+      category: component.category || 'BASIC',
       calculationType: component.calculationType,
-      value: component.value || 0,
       formula: component.formula || '',
       description: component.description || '',
       isStatutory: component.isStatutory
@@ -276,6 +311,14 @@ export default function SalaryStructurePage() {
           onClick={() => setActiveTab('components')}
         >
           Components
+        </Button>
+        <Button
+          variant={activeTab === 'test' ? 'default' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveTab('test')}
+        >
+          <TestTube className="h-4 w-4 mr-1" />
+          Test
         </Button>
       </div>
 
@@ -336,6 +379,46 @@ export default function SalaryStructurePage() {
                       rows={3}
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label>Salary Components</Label>
+                    <div className="border rounded-md p-3 max-h-48 overflow-y-auto">
+                      {components.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">No components available. Create components first.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {components.map((component) => (
+                            <div key={component.id} className="flex items-center space-x-2">
+                              <input
+                                type="checkbox"
+                                id={`component-${component.id}`}
+                                checked={structureFormData.componentIds.includes(component.id)}
+                                onChange={(e) => {
+                                  if (e.target.checked) {
+                                    setStructureFormData(prev => ({
+                                      ...prev,
+                                      componentIds: [...prev.componentIds, component.id]
+                                    }))
+                                  } else {
+                                    setStructureFormData(prev => ({
+                                      ...prev,
+                                      componentIds: prev.componentIds.filter(id => id !== component.id)
+                                    }))
+                                  }
+                                }}
+                                className="rounded border-gray-300"
+                              />
+                              <label htmlFor={`component-${component.id}`} className="flex-1 text-sm">
+                                <div className="font-medium">{component.name}</div>
+                                <div className="text-xs text-muted-foreground">
+                                  {component.code} • {component.type} • {component.calculationType}
+                                </div>
+                              </label>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   <div className="flex justify-end space-x-2">
                     <Button type="button" variant="outline" onClick={() => setIsStructureDialogOpen(false)}>
                       Cancel
@@ -392,7 +475,7 @@ export default function SalaryStructurePage() {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="type">Type</Label>
                       <Select
@@ -407,6 +490,28 @@ export default function SalaryStructurePage() {
                         <SelectContent>
                           <SelectItem value="EARNING">Earning</SelectItem>
                           <SelectItem value="DEDUCTION">Deduction</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="category">Category</Label>
+                      <Select
+                        value={componentFormData.category}
+                        onValueChange={(value: any) => 
+                          setComponentFormData(prev => ({ ...prev, category: value }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="BASIC">Basic</SelectItem>
+                          <SelectItem value="ALLOWANCE">Allowance</SelectItem>
+                          <SelectItem value="BONUS">Bonus</SelectItem>
+                          <SelectItem value="OVERTIME">Overtime</SelectItem>
+                          <SelectItem value="STATUTORY_DEDUCTION">Statutory Deduction</SelectItem>
+                          <SelectItem value="OTHER_DEDUCTION">Other Deduction</SelectItem>
+                          <SelectItem value="REIMBURSEMENT">Reimbursement</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -429,21 +534,7 @@ export default function SalaryStructurePage() {
                       </Select>
                     </div>
                   </div>
-                  {componentFormData.calculationType !== 'FORMULA' && (
-                    <div className="space-y-2">
-                      <Label htmlFor="value">
-                        {componentFormData.calculationType === 'PERCENTAGE' ? 'Percentage (%)' : 'Amount (₹)'}
-                      </Label>
-                      <Input
-                        id="value"
-                        type="number"
-                        value={componentFormData.value}
-                        onChange={(e) => setComponentFormData(prev => ({ ...prev, value: parseFloat(e.target.value) || 0 }))}
-                        placeholder={componentFormData.calculationType === 'PERCENTAGE' ? 'Enter percentage' : 'Enter amount'}
-                        required
-                      />
-                    </div>
-                  )}
+                  {/* Value will be configured when adding the component to a structure */}
                   {componentFormData.calculationType === 'FORMULA' && (
                     <div className="space-y-2">
                       <Label htmlFor="formula">Formula</Label>
@@ -492,7 +583,9 @@ export default function SalaryStructurePage() {
       </div>
 
       {/* Content */}
-      {activeTab === 'structures' ? (
+      {activeTab === 'test' ? (
+        <SalaryStructureTest />
+      ) : activeTab === 'structures' ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {filteredStructures.map((structure) => (
             <Card key={structure.id} className="hover:shadow-md transition-shadow">
@@ -516,6 +609,16 @@ export default function SalaryStructurePage() {
                       onClick={() => handleEditStructure(structure)}
                     >
                       <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setAssignForm(prev => ({ ...prev, structureId: structure.id }))
+                        setIsAssignDialogOpen(true)
+                      }}
+                    >
+                      Assign
                     </Button>
                     <Button
                       variant="ghost"
@@ -623,6 +726,66 @@ export default function SalaryStructurePage() {
         </div>
       )}
 
+      {/* Assign Structure Dialog */}
+      <Dialog open={isAssignDialogOpen} onOpenChange={setIsAssignDialogOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Assign Salary Structure to Employee</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            (async () => {
+              try {
+                setError(null)
+                const res = await fetch('/api/payroll/employee-salary', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    employeeId: assignForm.employeeId,
+                    structureId: assignForm.structureId,
+                    ctc: parseFloat(assignForm.ctc),
+                    effectiveFrom: new Date(assignForm.effectiveFrom).toISOString(),
+                  })
+                })
+                if (!res.ok) {
+                  const err = await res.json()
+                  throw new Error(err.error || 'Failed to assign structure')
+                }
+                setIsAssignDialogOpen(false)
+                setAssignForm({ employeeId: '', structureId: '', ctc: '', effectiveFrom: new Date().toISOString().split('T')[0] })
+              } catch (e) {
+                setError('Failed to assign salary structure')
+              }
+            })()
+          }} className="space-y-3">
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+            <div className="space-y-2">
+              <Label htmlFor="employeeId">Employee ID</Label>
+              <Input id="employeeId" value={assignForm.employeeId} onChange={(e) => setAssignForm(prev => ({ ...prev, employeeId: e.target.value }))} required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="structureId">Structure ID</Label>
+              <Input id="structureId" value={assignForm.structureId} onChange={(e) => setAssignForm(prev => ({ ...prev, structureId: e.target.value }))} required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="ctc">CTC (₹)</Label>
+              <Input id="ctc" type="number" value={assignForm.ctc} onChange={(e) => setAssignForm(prev => ({ ...prev, ctc: e.target.value }))} required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="effectiveFrom">Effective From</Label>
+              <Input id="effectiveFrom" type="date" value={assignForm.effectiveFrom} onChange={(e) => setAssignForm(prev => ({ ...prev, effectiveFrom: e.target.value }))} required />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="outline" onClick={() => setIsAssignDialogOpen(false)}>Cancel</Button>
+              <Button type="submit" className="bg-blue-600 hover:bg-blue-700">Assign</Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
       {((activeTab === 'structures' && filteredStructures.length === 0) || 
         (activeTab === 'components' && components.length === 0)) && !isLoading && (
         <div className="text-center py-12">

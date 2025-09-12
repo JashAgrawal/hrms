@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 import { payslipService } from '@/lib/payslip-service'
+import { emailService } from '@/lib/email-service'
 import { z } from 'zod'
 
 const bulkPayslipSchema = z.object({
   payrollRunId: z.string(),
-  format: z.enum(['json', 'html']).default('json'),
+  format: z.enum(['pdf', 'html']).default('pdf'),
   emailDistribution: z.boolean().default(false),
+  customSubject: z.string().optional(),
+  customMessage: z.string().optional(),
+  batchSize: z.number().min(1).max(50).default(10),
 })
 
 export async function POST(request: NextRequest) {
@@ -22,60 +27,190 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { payrollRunId, format, emailDistribution } = bulkPayslipSchema.parse(body)
+    const { 
+      payrollRunId, 
+      format, 
+      emailDistribution, 
+      customSubject, 
+      customMessage,
+      batchSize 
+    } = bulkPayslipSchema.parse(body)
 
-    // Generate payslips for all approved/paid records in the payroll run
-    const payslips = await payslipService.getBulkPayslips(payrollRunId)
+    // Get payroll run details
+    const payrollRun = await prisma.payrollRun.findUnique({
+      where: { id: payrollRunId },
+      include: {
+        payrollRecords: {
+          where: {
+            status: { in: ['APPROVED', 'PAID'] },
+          },
+          include: {
+            employee: {
+              include: {
+                department: true,
+              },
+            },
+          },
+          orderBy: {
+            employee: {
+              employeeCode: 'asc',
+            },
+          },
+        },
+      },
+    })
 
-    if (payslips.length === 0) {
+    if (!payrollRun) {
+      return NextResponse.json({ error: 'Payroll run not found' }, { status: 404 })
+    }
+
+    if (payrollRun.payrollRecords.length === 0) {
       return NextResponse.json(
         { error: 'No approved payroll records found for this run' },
         { status: 400 }
       )
     }
 
-    if (format === 'html') {
-      // Generate HTML payslips
-      const htmlPayslips = payslips.map(payslipData => {
-        const template = payslipService.generatePayslipTemplate(payslipData)
-        return {
-          employeeId: payslipData.employee.id,
-          employeeCode: payslipData.employee.employeeCode,
-          employeeName: `${payslipData.employee.firstName} ${payslipData.employee.lastName}`,
-          email: payslipData.employee.email,
-          html: payslipService.generatePayslipHTML(template),
-          filename: `payslip-${payslipData.employee.employeeCode}-${payslipData.payrollRun.period}.html`,
+    const results = {
+      totalRecords: payrollRun.payrollRecords.length,
+      generated: 0,
+      failed: 0,
+      emailsSent: 0,
+      emailsFailed: 0,
+      errors: [] as string[],
+      payslips: [] as any[],
+    }
+
+    // Process payslips in batches
+    for (let i = 0; i < payrollRun.payrollRecords.length; i += batchSize) {
+      const batch = payrollRun.payrollRecords.slice(i, i + batchSize)
+      
+      const batchPromises = batch.map(async (record) => {
+        try {
+          // Get payslip data
+          const payslipData = await payslipService.getPayslipData(record.id)
+          
+          let payslipBuffer: Buffer
+          let fileName: string
+          let contentType: string
+
+          if (format === 'pdf') {
+            payslipBuffer = await payslipService.generatePayslipPDF(payslipData)
+            fileName = `payslip-${payslipData.employee.employeeCode}-${payslipData.payrollRun.period}.pdf`
+            contentType = 'application/pdf'
+          } else {
+            const template = payslipService.generatePayslipTemplate(payslipData)
+            const html = payslipService.generatePayslipHTML(template)
+            payslipBuffer = Buffer.from(html, 'utf-8')
+            fileName = `payslip-${payslipData.employee.employeeCode}-${payslipData.payrollRun.period}.html`
+            contentType = 'text/html'
+          }
+
+          // Create or update payslip record
+          const existingPayslip = await prisma.payslip.findUnique({
+            where: {
+              employeeId_payrollRunId: {
+                employeeId: record.employeeId,
+                payrollRunId: record.payrollRunId,
+              },
+            },
+          })
+
+          let payslip
+          if (existingPayslip) {
+            payslip = await prisma.payslip.update({
+              where: { id: existingPayslip.id },
+              data: {
+                fileName,
+                fileSize: payslipBuffer.length,
+                generatedAt: new Date(),
+                generatedBy: session.user.id,
+                status: 'GENERATED',
+              },
+            })
+          } else {
+            payslip = await prisma.payslip.create({
+              data: {
+                employeeId: record.employeeId,
+                payrollRunId: record.payrollRunId,
+                fileName,
+                fileSize: payslipBuffer.length,
+                generatedAt: new Date(),
+                generatedBy: session.user.id,
+                status: 'GENERATED',
+              },
+            })
+          }
+
+          results.generated++
+          
+          const payslipInfo = {
+            id: payslip.id,
+            employeeId: record.employee.id,
+            employeeCode: record.employee.employeeCode,
+            employeeName: `${record.employee.firstName} ${record.employee.lastName}`,
+            email: record.employee.email,
+            fileName,
+            fileSize: payslipBuffer.length,
+            generatedAt: payslip.generatedAt,
+            emailSent: false,
+          }
+
+          // Send email if requested
+          if (emailDistribution) {
+            try {
+              const emailSent = await emailService.sendPayslipEmail({
+                employeeEmail: record.employee.email,
+                employeeName: `${record.employee.firstName} ${record.employee.lastName}`,
+                period: payrollRun.period,
+                payslipBuffer,
+                payslipFileName: fileName,
+                customSubject,
+                customMessage,
+              })
+
+              if (emailSent) {
+                await prisma.payslip.update({
+                  where: { id: payslip.id },
+                  data: {
+                    emailSent: true,
+                    emailSentAt: new Date(),
+                  },
+                })
+                results.emailsSent++
+                payslipInfo.emailSent = true
+              } else {
+                results.emailsFailed++
+                results.errors.push(`Failed to send email to ${record.employee.employeeCode}`)
+              }
+            } catch (emailError) {
+              results.emailsFailed++
+              results.errors.push(`Email error for ${record.employee.employeeCode}: ${emailError}`)
+            }
+          }
+
+          results.payslips.push(payslipInfo)
+        } catch (error) {
+          results.failed++
+          results.errors.push(`Failed to generate payslip for ${record.employee.employeeCode}: ${error}`)
         }
       })
 
-      // If email distribution is requested, send emails
-      if (emailDistribution) {
-        const emailResults = await sendBulkPayslipEmails(htmlPayslips)
-        
-        return NextResponse.json({
-          message: 'Bulk payslips generated and emails sent',
-          totalPayslips: payslips.length,
-          emailResults,
-          payslips: htmlPayslips.map(p => ({
-            employeeCode: p.employeeCode,
-            employeeName: p.employeeName,
-            filename: p.filename,
-          })),
-        })
+      await Promise.all(batchPromises)
+      
+      // Add small delay between batches to avoid overwhelming the system
+      if (i + batchSize < payrollRun.payrollRecords.length) {
+        await new Promise(resolve => setTimeout(resolve, 500))
       }
-
-      return NextResponse.json({
-        message: 'Bulk payslips generated successfully',
-        totalPayslips: payslips.length,
-        payslips: htmlPayslips,
-      })
     }
 
-    // Return JSON data
+    const message = emailDistribution 
+      ? `Bulk payslips generated. ${results.generated} generated, ${results.emailsSent} emails sent, ${results.emailsFailed} email failures`
+      : `Bulk payslips generated successfully. ${results.generated} generated, ${results.failed} failed`
+
     return NextResponse.json({
-      message: 'Bulk payslips generated successfully',
-      totalPayslips: payslips.length,
-      payslips,
+      message,
+      results,
     })
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -93,47 +228,3 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Helper function to send bulk payslip emails
-async function sendBulkPayslipEmails(payslips: any[]) {
-  const results = {
-    sent: 0,
-    failed: 0,
-    errors: [] as string[],
-  }
-
-  for (const payslip of payslips) {
-    try {
-      // In a real application, you would use a proper email service like SendGrid, AWS SES, etc.
-      // For now, we'll simulate email sending
-      await simulateEmailSending(payslip)
-      results.sent++
-    } catch (error) {
-      results.failed++
-      results.errors.push(`Failed to send to ${payslip.employeeCode}: ${error}`)
-    }
-  }
-
-  return results
-}
-
-// Simulate email sending (replace with actual email service)
-async function simulateEmailSending(payslip: any) {
-  // Simulate email sending delay
-  await new Promise(resolve => setTimeout(resolve, 100))
-  
-  // Simulate occasional failures (5% failure rate)
-  if (Math.random() < 0.05) {
-    throw new Error('Email service temporarily unavailable')
-  }
-
-  console.log(`📧 Payslip email sent to ${payslip.employeeName} (${payslip.email})`)
-  
-  // In a real implementation, you would:
-  // 1. Use an email service like SendGrid, AWS SES, or Nodemailer
-  // 2. Create a proper email template
-  // 3. Attach the HTML payslip or convert to PDF
-  // 4. Handle email delivery status and retries
-  // 5. Log email activities for audit purposes
-  
-  return true
-}

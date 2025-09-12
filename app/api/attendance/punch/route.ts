@@ -61,6 +61,8 @@ export async function POST(request: NextRequest) {
       let minDistance = Infinity
 
       for (const empLoc of employee.employeeLocations) {
+        if (!empLoc.location) continue
+        
         const distance = calculateDistance(
           location.latitude,
           location.longitude,

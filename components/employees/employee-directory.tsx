@@ -6,13 +6,14 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Card, CardContent } from '@/components/ui/card'
-import { 
+import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { DepartmentSelect } from '@/components/ui/department-select'
 import { 
   Dialog,
   DialogContent,
@@ -268,19 +269,14 @@ export function EmployeeDirectory({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 p-4 border rounded-lg bg-muted/50">
             <div>
               <label className="text-sm font-medium mb-2 block">Department</label>
-              <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Departments" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All Departments</SelectItem>
-                  {departments.map((dept) => (
-                    <SelectItem key={dept.id} value={dept.id}>
-                      {dept.name} ({dept._count.employees})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <DepartmentSelect
+                departments={departments}
+                value={selectedDepartment}
+                onValueChange={setSelectedDepartment}
+                placeholder="All Departments"
+                showEmployeeCount={true}
+                allowClear={true}
+              />
             </div>
 
             <div>
