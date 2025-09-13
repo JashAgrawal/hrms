@@ -1,0 +1,338 @@
+import { prisma } from '@/lib/prisma'
+
+export interface AbsenceMarkingJobResult {
+  success: boolean
+  processed: number
+  errors: Array<{ employeeId: string; error: string }>
+  summary: {
+    totalRecordsFound: number
+    successful: number
+    failed: number
+    skipped: number
+  }
+  processedEmployees: Array<{
+    employeeId: string
+    employeeCode: string
+    employeeName: string
+    checkInTime: string
+    previousStatus: string
+  }>
+}
+
+/**
+ * Automatically mark employees as absent if they haven't checked out by 12 PM (end of day)
+ * This function should be called daily after 12 PM
+ */
+export async function markAbsentForMissingCheckout(
+  targetDate?: Date
+): Promise<AbsenceMarkingJobResult> {
+  const result: AbsenceMarkingJobResult = {
+    success: false,
+    processed: 0,
+    errors: [],
+    summary: {
+      totalRecordsFound: 0,
+      successful: 0,
+      failed: 0,
+      skipped: 0,
+    },
+    processedEmployees: [],
+  }
+
+  try {
+    // Use provided date or current date
+    const today = targetDate || new Date()
+    const dateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    
+    // Set cutoff time to 12:00 PM (noon)
+    const cutoffTime = new Date(dateOnly)
+    cutoffTime.setHours(12, 0, 0, 0)
+    
+    const currentTime = new Date()
+    
+    // Only run this job if current time is after the cutoff time
+    if (currentTime < cutoffTime) {
+      console.log(`Skipping absence marking - current time (${currentTime.toLocaleTimeString()}) is before cutoff time (${cutoffTime.toLocaleTimeString()})`)
+      result.success = true
+      return result
+    }
+
+    console.log(`Starting absence marking for ${dateOnly.toDateString()} at ${currentTime.toLocaleTimeString()}`)
+
+    // Find attendance records where employees checked in but haven't checked out by 12 PM
+    const attendanceRecords = await prisma.attendanceRecord.findMany({
+      where: {
+        date: dateOnly,
+        checkIn: {
+          not: null, // Employee checked in
+        },
+        checkOut: null, // Employee hasn't checked out
+        status: {
+          notIn: ['ABSENT', 'ON_LEAVE', 'HOLIDAY'], // Don't process already absent or leave records
+        },
+      },
+      include: {
+        employee: {
+          select: {
+            id: true,
+            employeeCode: true,
+            firstName: true,
+            lastName: true,
+            status: true,
+          },
+        },
+      },
+    })
+
+    result.summary.totalRecordsFound = attendanceRecords.length
+
+    if (attendanceRecords.length === 0) {
+      console.log('No attendance records found that need absence marking')
+      result.success = true
+      return result
+    }
+
+    console.log(`Found ${attendanceRecords.length} attendance records to process`)
+
+    // Process each attendance record
+    for (const record of attendanceRecords) {
+      try {
+        // Skip inactive employees
+        if (record.employee.status !== 'ACTIVE') {
+          console.log(`Skipping ${record.employee.employeeCode} - employee status is ${record.employee.status}`)
+          result.summary.skipped++
+          continue
+        }
+
+        // Check if employee checked in before 12 PM (to avoid marking someone absent who checked in after 12 PM)
+        if (record.checkIn && record.checkIn > cutoffTime) {
+          console.log(`Skipping ${record.employee.employeeCode} - checked in after cutoff time`)
+          result.summary.skipped++
+          continue
+        }
+
+        const previousStatus = record.status
+        const employeeName = `${record.employee.firstName} ${record.employee.lastName}`
+
+        // Update attendance record to ABSENT
+        await prisma.attendanceRecord.update({
+          where: { id: record.id },
+          data: {
+            status: 'ABSENT',
+            notes: record.notes 
+              ? `${record.notes}\n[AUTO] Marked absent due to missing checkout by 12 PM on ${currentTime.toLocaleString()}`
+              : `[AUTO] Marked absent due to missing checkout by 12 PM on ${currentTime.toLocaleString()}`,
+            updatedAt: currentTime,
+          },
+        })
+
+        // Create audit log for this action
+        await prisma.auditLog.create({
+          data: {
+            userId: 'SYSTEM', // System-generated action
+            action: 'ATTENDANCE_AUTO_ABSENT',
+            resource: 'ATTENDANCE',
+            resourceId: record.id,
+            oldValues: {
+              status: previousStatus,
+            },
+            newValues: {
+              status: 'ABSENT',
+              reason: 'Missing checkout by 12 PM',
+              processedAt: currentTime,
+            },
+            ipAddress: 'SYSTEM',
+            userAgent: 'Attendance Absence Scheduler',
+          },
+        })
+
+        console.log(`Marked ${record.employee.employeeCode} (${employeeName}) as absent - checked in at ${record.checkIn?.toLocaleTimeString()} but no checkout by 12 PM`)
+        
+        result.processedEmployees.push({
+          employeeId: record.employee.id,
+          employeeCode: record.employee.employeeCode,
+          employeeName,
+          checkInTime: record.checkIn?.toLocaleString() || '',
+          previousStatus,
+        })
+        
+        result.summary.successful++
+        result.processed++
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        console.error(`Error processing employee ${record.employee.employeeCode}:`, error)
+        
+        result.errors.push({
+          employeeId: record.employee.id,
+          error: errorMessage,
+        })
+        result.summary.failed++
+      }
+    }
+
+    result.success = true
+    console.log(`Absence marking completed: ${result.summary.successful} successful, ${result.summary.failed} failed, ${result.summary.skipped} skipped`)
+
+    return result
+  } catch (error) {
+    console.error('Error in absence marking job:', error)
+    result.errors.push({
+      employeeId: 'SYSTEM',
+      error: error instanceof Error ? error.message : 'System error',
+    })
+    return result
+  }
+}
+
+/**
+ * Mark absent for a specific employee (for manual corrections)
+ */
+export async function markEmployeeAbsentForMissingCheckout(
+  employeeId: string,
+  targetDate?: Date,
+  reason?: string
+): Promise<{ success: boolean; message: string }> {
+  try {
+    const today = targetDate || new Date()
+    const dateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+
+    const attendanceRecord = await prisma.attendanceRecord.findUnique({
+      where: {
+        employeeId_date: {
+          employeeId,
+          date: dateOnly,
+        },
+      },
+      include: {
+        employee: {
+          select: {
+            employeeCode: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+      },
+    })
+
+    if (!attendanceRecord) {
+      return { success: false, message: 'Attendance record not found' }
+    }
+
+    if (!attendanceRecord.checkIn) {
+      return { success: false, message: 'Employee did not check in' }
+    }
+
+    if (attendanceRecord.checkOut) {
+      return { success: false, message: 'Employee already checked out' }
+    }
+
+    if (attendanceRecord.status === 'ABSENT') {
+      return { success: false, message: 'Employee already marked as absent' }
+    }
+
+    const previousStatus = attendanceRecord.status
+    const currentTime = new Date()
+    const customReason = reason || 'Missing checkout by end of day'
+
+    // Update attendance record
+    await prisma.attendanceRecord.update({
+      where: { id: attendanceRecord.id },
+      data: {
+        status: 'ABSENT',
+        notes: attendanceRecord.notes 
+          ? `${attendanceRecord.notes}\n[MANUAL] ${customReason} on ${currentTime.toLocaleString()}`
+          : `[MANUAL] ${customReason} on ${currentTime.toLocaleString()}`,
+        updatedAt: currentTime,
+      },
+    })
+
+    // Create audit log
+    await prisma.auditLog.create({
+      data: {
+        userId: 'SYSTEM',
+        action: 'ATTENDANCE_MANUAL_ABSENT',
+        resource: 'ATTENDANCE',
+        resourceId: attendanceRecord.id,
+        oldValues: {
+          status: previousStatus,
+        },
+        newValues: {
+          status: 'ABSENT',
+          reason: customReason,
+          processedAt: currentTime,
+        },
+        ipAddress: 'SYSTEM',
+        userAgent: 'Manual Absence Marking',
+      },
+    })
+
+    const employeeName = `${attendanceRecord.employee.firstName} ${attendanceRecord.employee.lastName}`
+    return { 
+      success: true, 
+      message: `Successfully marked ${attendanceRecord.employee.employeeCode} (${employeeName}) as absent` 
+    }
+  } catch (error) {
+    console.error('Error marking employee absent:', error)
+    return { 
+      success: false, 
+      message: error instanceof Error ? error.message : 'Unknown error' 
+    }
+  }
+}
+
+/**
+ * Get statistics about potential absence markings (for preview/reporting)
+ */
+export async function getAbsenceMarkingPreview(targetDate?: Date): Promise<{
+  totalRecords: number
+  eligibleForMarking: number
+  alreadyProcessed: number
+  employees: Array<{
+    employeeCode: string
+    employeeName: string
+    checkInTime: string
+    currentStatus: string
+  }>
+}> {
+  const today = targetDate || new Date()
+  const dateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+  
+  const attendanceRecords = await prisma.attendanceRecord.findMany({
+    where: {
+      date: dateOnly,
+      checkIn: { not: null },
+    },
+    include: {
+      employee: {
+        select: {
+          employeeCode: true,
+          firstName: true,
+          lastName: true,
+          status: true,
+        },
+      },
+    },
+  })
+
+  const eligibleRecords = attendanceRecords.filter(record => 
+    record.checkOut === null && 
+    !['ABSENT', 'ON_LEAVE', 'HOLIDAY'].includes(record.status) &&
+    record.employee.status === 'ACTIVE'
+  )
+
+  const alreadyProcessed = attendanceRecords.filter(record => 
+    record.status === 'ABSENT'
+  ).length
+
+  return {
+    totalRecords: attendanceRecords.length,
+    eligibleForMarking: eligibleRecords.length,
+    alreadyProcessed,
+    employees: eligibleRecords.map(record => ({
+      employeeCode: record.employee.employeeCode,
+      employeeName: `${record.employee.firstName} ${record.employee.lastName}`,
+      checkInTime: record.checkIn?.toLocaleString() || '',
+      currentStatus: record.status,
+    })),
+  }
+}

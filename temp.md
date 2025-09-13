@@ -69,3 +69,28 @@ Every single thing listed in this
 * Eg:- Only Hr/admin can create leave policies but i can still do it when i login as employee this should'nt be the case
 
 ---
+
+
+
+
+
+in attendence module
+
+
+
+we need merge webcheckin and gps check in we will have only 1 checkin and checkout
+
+
+
+for feild employee's after checkin we need 2 options checkout and checkin at new site (its functionality is mentioned before)
+
+
+
+in attendence report page we need 
+
+
+
+
+
+
+

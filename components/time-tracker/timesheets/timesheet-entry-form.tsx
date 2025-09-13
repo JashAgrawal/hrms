@@ -137,7 +137,7 @@ export function TimesheetEntryForm({
       
       form.setValue('entries', newEntries)
     }
-  }, [currentWeek, weekStart, weekEnd, weekDays, form, initialData])
+  }, [currentWeek, initialData, form])
 
   // Calculate hours based on time range
   const calculateHours = (startTime: string, endTime: string, breakDuration: number) => {

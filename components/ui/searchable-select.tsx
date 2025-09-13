@@ -135,7 +135,7 @@ export function SearchableSelect({
                   key={option.value}
                   value={option.value}
                   onSelect={handleSelect}
-                  disabled={option.disabled}
+                  // disabled={option.disabled}
                   className="flex items-center gap-2 px-3 py-2"
                 >
                   <Check

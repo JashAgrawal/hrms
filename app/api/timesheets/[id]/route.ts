@@ -154,7 +154,7 @@ export async function PUT(
 
     // Update timesheet in transaction
     const updatedTimesheet = await prisma.$transaction(async (tx) => {
-      let updateData: any = {}
+      const updateData: any = {}
 
       // Handle status updates
       if (validatedData.status) {

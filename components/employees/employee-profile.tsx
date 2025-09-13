@@ -6,13 +6,13 @@ import { Button } from '@/components/ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { 
-  User, 
-  Mail, 
-  Phone, 
-  Calendar, 
-  MapPin, 
-  Building, 
+import {
+  User,
+  Mail,
+  Phone,
+  Calendar,
+  MapPin,
+  Building,
   Briefcase,
   DollarSign,
   FileText,
@@ -23,6 +23,8 @@ import {
 } from 'lucide-react'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { EmployeeSiteAssignment } from './employee-site-assignment'
+import { LocationAssignmentForm } from './location-assignment-form'
+import { useSession } from 'next-auth/react'
 
 interface Employee {
   id: string
@@ -131,9 +133,14 @@ const leaveStatusColors = {
 }
 
 export function EmployeeProfile({ employee }: EmployeeProfileProps) {
+  const { data: session } = useSession()
+
   const getInitials = (firstName: string, lastName: string) => {
     return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase()
   }
+
+  // Check if current user can manage locations
+  const canManageLocations = session?.user && ['ADMIN', 'HR'].includes(session.user.role)
 
   const formatAddress = (address?: Record<string, unknown>) => {
     if (!address) return 'Not provided'
@@ -237,12 +244,15 @@ export function EmployeeProfile({ employee }: EmployeeProfileProps) {
 
       {/* Detailed Information Tabs */}
       <Tabs defaultValue="personal" className="space-y-4">
-        <TabsList className={`grid w-full ${employee.employeeType === 'FIELD_EMPLOYEE' ? 'grid-cols-7' : 'grid-cols-6'}`}>
+        <TabsList className={`grid w-full ${employee.employeeType === 'FIELD_EMPLOYEE' ? (canManageLocations ? 'grid-cols-8' : 'grid-cols-7') : (canManageLocations ? 'grid-cols-7' : 'grid-cols-6')}`}>
           <TabsTrigger value="personal">Personal</TabsTrigger>
           <TabsTrigger value="professional">Professional</TabsTrigger>
           <TabsTrigger value="salary">Salary</TabsTrigger>
           <TabsTrigger value="attendance">Attendance</TabsTrigger>
           <TabsTrigger value="leave">Leave</TabsTrigger>
+          {canManageLocations && (
+            <TabsTrigger value="locations">Locations</TabsTrigger>
+          )}
           {employee.employeeType === 'FIELD_EMPLOYEE' && (
             <TabsTrigger value="sites">Sites</TabsTrigger>
           )}
@@ -491,7 +501,7 @@ export function EmployeeProfile({ employee }: EmployeeProfileProps) {
                         </p>
                         <p className="text-sm text-muted-foreground">{leave.reason}</p>
                       </div>
-                      <Badge 
+                      <Badge
                         variant="outline"
                         className={leaveStatusColors[leave.status as keyof typeof leaveStatusColors]}
                       >
@@ -506,6 +516,16 @@ export function EmployeeProfile({ employee }: EmployeeProfileProps) {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Location Assignment (HR/Admin Only) */}
+        {canManageLocations && (
+          <TabsContent value="locations">
+            <LocationAssignmentForm
+              employeeId={employee.id}
+              employeeName={`${employee.firstName} ${employee.lastName}`}
+            />
+          </TabsContent>
+        )}
 
         {/* Sites (Field Employees Only) */}
         {employee.employeeType === 'FIELD_EMPLOYEE' && (

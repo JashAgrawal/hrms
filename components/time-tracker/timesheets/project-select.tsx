@@ -14,27 +14,18 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { useToast } from '@/hooks/use-toast'
-
-interface Project {
-  id: string
-  name: string
-  code: string
-  description?: string
-  clientName?: string
-  status: 'ACTIVE' | 'COMPLETED' | 'ON_HOLD' | 'CANCELLED'
-  startDate: string
-  endDate?: string
-}
+import { ProjectWithCount, ProjectStatus } from '@/components/time-tracker/shared/prisma-types'
+import { Project } from '@prisma/client'
 
 interface ProjectSelectProps {
   value?: string
   onValueChange: (value: string) => void
-  projects: Project[]
+  projects: ProjectWithCount[]
   onRefresh?: () => void
   placeholder?: string
   disabled?: boolean
   allowCreate?: boolean
-  onCreateProject?: (project: Omit<Project, 'id'>) => Promise<Project>
+  onCreateProject?: (project: Omit<ProjectWithCount, 'id' | '_count'>) => Promise<ProjectWithCount>
   className?: string
 }
 
@@ -347,7 +338,7 @@ export function ProjectSelect({
 interface CreateProjectDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onCreateProject: (project: Omit<Project, 'id'>) => void
+  onCreateProject: (project: Omit<ProjectWithCount, 'id' | '_count'>) => void
   isLoading: boolean
 }
 
@@ -362,7 +353,7 @@ function CreateProjectDialog({
     code: '',
     description: '',
     clientName: '',
-    status: 'ACTIVE' as const,
+    status: 'ACTIVE' as ProjectStatus,
     startDate: new Date().toISOString().split('T')[0],
     endDate: ''
   })
@@ -371,7 +362,11 @@ function CreateProjectDialog({
     e.preventDefault()
     onCreateProject({
       ...formData,
-      endDate: formData.endDate || undefined
+      startDate: new Date(formData.startDate),
+      endDate: formData.endDate ? new Date(formData.endDate) : null,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date()
     })
   }
 
@@ -381,7 +376,7 @@ function CreateProjectDialog({
       code: '',
       description: '',
       clientName: '',
-      status: 'ACTIVE',
+      status: 'ACTIVE' as ProjectStatus,
       startDate: new Date().toISOString().split('T')[0],
       endDate: ''
     })
@@ -465,7 +460,7 @@ function CreateProjectDialog({
             <Label htmlFor="status">Status</Label>
             <Select
               value={formData.status}
-              onValueChange={(value: any) => setFormData(prev => ({ ...prev, status: value }))}
+              onValueChange={(value: ProjectStatus) => setFormData(prev => ({ ...prev, status: value }))}
             >
               <SelectTrigger>
                 <SelectValue />

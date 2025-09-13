@@ -231,9 +231,9 @@ export function TimesheetDashboard({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Total Hours</p>
-                <p className="text-3xl font-bold">{data.summary.totalHours.toFixed(1)}</p>
+                <p className="text-3xl font-bold">{Number(data.summary.totalHours).toFixed(1)}</p>
                 <p className="text-sm text-muted-foreground">
-                  {data.summary.averageHoursPerDay.toFixed(1)} avg/day
+                  {Number(data.summary.averageHoursPerDay).toFixed(1)} avg/day
                 </p>
               </div>
               <Clock className="h-8 w-8 text-blue-600" />
@@ -246,9 +246,9 @@ export function TimesheetDashboard({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Billable Hours</p>
-                <p className="text-3xl font-bold">{data.summary.billableHours.toFixed(1)}</p>
+                <p className="text-3xl font-bold">{Number(data.summary.billableHours).toFixed(1)}</p>
                 <p className="text-sm text-muted-foreground">
-                  {((data.summary.billableHours / data.summary.totalHours) * 100).toFixed(1)}% of total
+                  {((Number(data.summary.billableHours) / Number(data.summary.totalHours)) * 100).toFixed(1)}% of total
                 </p>
               </div>
               <DollarSign className="h-8 w-8 text-green-600" />
@@ -261,8 +261,8 @@ export function TimesheetDashboard({
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Utilization Rate</p>
-                <p className="text-3xl font-bold">{data.summary.utilizationRate.toFixed(1)}%</p>
-                <Progress value={data.summary.utilizationRate} className="mt-2" />
+                <p className="text-3xl font-bold">{Number(data.summary.utilizationRate).toFixed(1)}%</p>
+                <Progress value={Number(data.summary.utilizationRate)} className="mt-2" />
               </div>
               <Target className="h-8 w-8 text-purple-600" />
             </div>
@@ -381,11 +381,11 @@ export function TimesheetDashboard({
                         <Badge variant="outline">{project.projectCode}</Badge>
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {project.employeeCount} employees • {project.totalHours.toFixed(1)} total hours
+                        {project.employeeCount} employees • {Number(project.totalHours).toFixed(1)} total hours
                       </p>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium">{project.utilizationRate.toFixed(1)}%</p>
+                      <p className="font-medium">{Number(project.utilizationRate).toFixed(1)}%</p>
                       <p className="text-sm text-muted-foreground">utilization</p>
                     </div>
                   </div>
@@ -414,13 +414,13 @@ export function TimesheetDashboard({
                           <Badge variant="outline">{employee.employeeId}</Badge>
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {employee.projectCount} projects • {employee.totalHours.toFixed(1)} total hours
+                          {employee.projectCount} projects • {Number(employee.totalHours).toFixed(1)} total hours
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-medium">{employee.billableHours.toFixed(1)}h</p>
+                        <p className="font-medium">{Number(employee.billableHours).toFixed(1)}h</p>
                         <p className="text-sm text-muted-foreground">
-                          {employee.utilizationRate.toFixed(1)}% utilization
+                          {Number(employee.utilizationRate).toFixed(1)}% utilization
                         </p>
                       </div>
                     </div>
@@ -448,7 +448,7 @@ export function TimesheetDashboard({
                       cx="50%"
                       cy="50%"
                       labelLine={false}
-                      label={(entry: any) => `${entry.status} (${entry.percentage.toFixed(1)}%)`}
+                      label={(entry: any) => `${entry.status} (${Number(entry.percentage).toFixed(1)}%)`}
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="count"

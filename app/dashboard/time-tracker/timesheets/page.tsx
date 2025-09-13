@@ -5,58 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { TimesheetEntryForm } from '@/components/timesheets/timesheet-entry-form'
-import { TimesheetList } from '@/components/timesheets/timesheet-list'
-import { TimesheetApproval } from '@/components/timesheets/timesheet-approval'
+import { TimesheetEntryForm } from '@/components/time-tracker/timesheets/timesheet-entry-form'
+import { TimesheetList } from '@/components/time-tracker/timesheets/timesheet-list'
+import { TimesheetApproval } from '@/components/time-tracker/timesheets/timesheet-approval'
 import { Plus, Clock, CheckCircle, XCircle, FileText } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-
-interface Project {
-  id: string
-  name: string
-  code: string
-  clientName?: string
-  status: string
-}
-
-interface Timesheet {
-  id: string
-  startDate: string
-  endDate: string
-  status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED'
-  totalHours: number
-  submittedAt?: string
-  approvedAt?: string
-  rejectedAt?: string
-  rejectionReason?: string
-  employee: {
-    id: string
-    firstName: string
-    lastName: string
-    employeeId: string
-    department?: { name: string }
-  }
-  approver?: {
-    id: string
-    name: string
-  }
-  entries: Array<{
-    id: string
-    date: string
-    startTime: string
-    endTime: string
-    breakDuration: number
-    taskDescription?: string
-    billableHours: number
-    nonBillableHours: number
-    overtimeHours: number
-    project?: {
-      id: string
-      name: string
-      code: string
-    }
-  }>
-}
+import { Project, Timesheet, TimeEntry } from '@/components/time-tracker/shared/types'
+import { TimesheetWithEmployee } from '@/components/time-tracker/shared/prisma-types'
 
 interface ApprovalHistory {
   id: string
@@ -74,7 +29,7 @@ export default function TimesheetsPage() {
 
   // State management
   const [activeTab, setActiveTab] = useState('my-timesheets')
-  const [timesheets, setTimesheets] = useState<Timesheet[]>([])
+  const [timesheets, setTimesheets] = useState<TimesheetWithEmployee[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [currentPage, setCurrentPage] = useState(1)
@@ -83,8 +38,8 @@ export default function TimesheetsPage() {
 
   // Modal states
   const [showCreateForm, setShowCreateForm] = useState(false)
-  const [editingTimesheet, setEditingTimesheet] = useState<Timesheet | null>(null)
-  const [approvingTimesheet, setApprovingTimesheet] = useState<Timesheet | null>(null)
+  const [editingTimesheet, setEditingTimesheet] = useState<TimesheetWithEmployee | null>(null)
+  const [approvingTimesheet, setApprovingTimesheet] = useState<TimesheetWithEmployee | null>(null)
   const [approvalHistory, setApprovalHistory] = useState<ApprovalHistory[]>([])
 
   // Filters
@@ -111,7 +66,15 @@ export default function TimesheetsPage() {
   const fetchTimesheets = async () => {
     try {
       setLoading(true)
+
+      // Get date range for current month by default
+      const now = new Date()
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0)
+
       const params = new URLSearchParams({
+        startDate: startOfMonth.toISOString().split('T')[0],
+        endDate: endOfMonth.toISOString().split('T')[0],
         page: currentPage.toString(),
         limit: pageSize.toString(),
         ...(filters.status && { status: filters.status }),
@@ -121,16 +84,30 @@ export default function TimesheetsPage() {
       })
 
       const res = await fetch(`/api/timesheets?${params}`)
-      if (!res.ok) throw new Error('Failed to fetch timesheets')
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || 'Failed to fetch timesheets')
+      }
 
       const data = await res.json()
-      setTimesheets(data.timesheets || [])
+      // Convert string dates to Date objects
+      const timesheetsWithDates = (data.timesheets || []).map((timesheet: any) => ({
+        ...timesheet,
+        createdAt: new Date(timesheet.createdAt),
+        updatedAt: new Date(timesheet.updatedAt),
+        startDate: new Date(timesheet.startDate),
+        endDate: new Date(timesheet.endDate),
+        submittedAt: timesheet.submittedAt ? new Date(timesheet.submittedAt) : null,
+        approvedAt: timesheet.approvedAt ? new Date(timesheet.approvedAt) : null,
+        rejectedAt: timesheet.rejectedAt ? new Date(timesheet.rejectedAt) : null,
+      }))
+      setTimesheets(timesheetsWithDates)
       setTotalCount(data.pagination?.total || 0)
     } catch (error) {
       console.error('Error fetching timesheets:', error)
       toast({
         title: 'Error',
-        description: 'Failed to load timesheets',
+        description: error instanceof Error ? error.message : 'Failed to load timesheets',
         variant: 'destructive'
       })
     } finally {
@@ -388,7 +365,7 @@ export default function TimesheetsPage() {
   }
 
   // Handle view timesheet
-  const handleViewTimesheet = async (timesheet: Timesheet) => {
+  const handleViewTimesheet = async (timesheet: TimesheetWithEmployee) => {
     await fetchApprovalHistory(timesheet.id)
     setApprovingTimesheet(timesheet)
   }
@@ -570,18 +547,18 @@ export default function TimesheetsPage() {
             <TimesheetEntryForm
               initialData={editingTimesheet ? {
                 id: editingTimesheet.id,
-                startDate: editingTimesheet.startDate,
-                endDate: editingTimesheet.endDate,
+                startDate: editingTimesheet.startDate.toISOString().split('T')[0],
+                endDate: editingTimesheet.endDate.toISOString().split('T')[0],
                 entries: editingTimesheet.entries.map(entry => ({
-                  date: entry.date,
-                  startTime: entry.startTime,
-                  endTime: entry.endTime,
+                  date: entry.date instanceof Date ? entry.date.toISOString().split('T')[0] : entry.date,
+                  startTime: entry.startTime || '09:00',
+                  endTime: entry.endTime || '17:00',
                   breakDuration: entry.breakDuration,
                   projectId: entry.project?.id || '',
                   taskDescription: entry.taskDescription || '',
-                  billableHours: entry.billableHours,
-                  nonBillableHours: entry.nonBillableHours,
-                  overtimeHours: entry.overtimeHours,
+                  billableHours: Number(entry.billableHours),
+                  nonBillableHours: Number(entry.nonBillableHours),
+                  overtimeHours: Number(entry.overtimeHours),
                 })),
                 status: editingTimesheet.status
               } : undefined}

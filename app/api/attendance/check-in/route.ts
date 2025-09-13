@@ -1,18 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { LocationService } from '@/lib/location-service'
 import { z } from 'zod'
 
 // Schema for check-in request
 const checkInSchema = z.object({
   location: z.object({
-    latitude: z.number().optional(),
-    longitude: z.number().optional(),
+    latitude: z.number().min(-90).max(90),
+    longitude: z.number().min(-180).max(180),
     accuracy: z.number().optional(),
     address: z.string().optional(),
+    timestamp: z.string().datetime().optional()
   }).optional(),
-  method: z.enum(['WEB', 'MOBILE', 'GPS', 'BIOMETRIC']).default('WEB'),
+  method: z.enum(['WEB', 'MOBILE', 'GPS', 'BIOMETRIC']).optional(),
   notes: z.string().optional(),
+  deviceInfo: z.object({
+    platform: z.string().optional(),
+    userAgent: z.string().optional(),
+    deviceId: z.string().optional(),
+    appVersion: z.string().optional()
+  }).optional()
 })
 
 // POST /api/attendance/check-in - Check in for attendance
@@ -68,6 +76,62 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Determine method based on location availability
+    let method = data.method || (data.location ? 'GPS' : 'WEB')
+    let locationData = data.location
+    let locationValidation = null
+
+    // If location is provided, validate it for GPS-based checkin
+    if (data.location && data.location.latitude && data.location.longitude) {
+      try {
+        locationValidation = await LocationService.validateEmployeeLocation(
+          user.employee.id,
+          {
+            latitude: data.location.latitude,
+            longitude: data.location.longitude,
+            accuracy: data.location.accuracy,
+            timestamp: data.location.timestamp ? new Date(data.location.timestamp) : new Date()
+          }
+        )
+
+        // If location is not valid, create attendance request instead
+        if (!locationValidation.isValid) {
+          const attendanceRequest = await prisma.attendanceRequest.create({
+            data: {
+              employeeId: user.employee.id,
+              date: today,
+              checkInTime: now,
+              location: {
+                ...data.location,
+                validation: JSON.parse(JSON.stringify(locationValidation))
+              },
+              reason: data.notes || 'Check-in from outside assigned location',
+              status: 'PENDING'
+            }
+          })
+
+          return NextResponse.json({
+            success: false,
+            requiresApproval: true,
+            attendanceRequest,
+            locationValidation,
+            message: 'Check-in requires approval due to location. Request submitted for manager approval.'
+          })
+        }
+
+        method = 'GPS'
+        locationData = JSON.parse(JSON.stringify({
+          ...data.location,
+          validation: locationValidation
+        }))
+      } catch (error) {
+        console.error('Location validation error:', error)
+        // Continue with web-based checkin if location validation fails
+        method = 'WEB'
+        locationData = data.location
+      }
+    }
+
     // Determine attendance status based on time
     const workStartTime = new Date()
     workStartTime.setHours(9, 0, 0, 0) // 9:00 AM
@@ -90,8 +154,8 @@ export async function POST(request: NextRequest) {
       update: {
         checkIn: now,
         status: status as any,
-        method: data.method as any,
-        location: data.location,
+        method: method as any,
+        location: locationData,
         notes: data.notes,
         updatedAt: now
       },
@@ -100,8 +164,8 @@ export async function POST(request: NextRequest) {
         date: today,
         checkIn: now,
         status: status as any,
-        method: data.method as any,
-        location: data.location,
+        method: method as any,
+        location: locationData,
         notes: data.notes,
       }
     })
@@ -113,12 +177,12 @@ export async function POST(request: NextRequest) {
         employeeId: user.employee.id,
         type: 'CHECK_IN',
         timestamp: now,
-        location: data.location,
-        method: data.method as any,
+        location: locationData,
+        method: method as any,
         ipAddress: clientIP,
-        deviceInfo: {
+        deviceInfo: data.deviceInfo || {
           userAgent: request.headers.get('user-agent'),
-          platform: 'web'
+          platform: method === 'GPS' ? 'mobile' : 'web'
         }
       }
     })
@@ -133,8 +197,8 @@ export async function POST(request: NextRequest) {
         newValues: {
           checkIn: now,
           status,
-          method: data.method,
-          location: data.location
+          method: method,
+          location: locationData
         },
         ipAddress: clientIP,
         userAgent: request.headers.get('user-agent')
@@ -147,7 +211,9 @@ export async function POST(request: NextRequest) {
         ...attendanceRecord,
         checkInOut: [checkInRecord]
       },
-      message: `Successfully checked in at ${now.toLocaleTimeString()}`
+      locationValidation,
+      method,
+      message: `Successfully checked in at ${now.toLocaleTimeString()}${method === 'GPS' ? ' with GPS verification' : ''}`
     })
 
   } catch (error) {

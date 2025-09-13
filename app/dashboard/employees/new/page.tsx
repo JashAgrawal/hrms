@@ -24,10 +24,19 @@ async function getManagers() {
     where: {
       status: 'ACTIVE',
       OR: [
+        // Include employees with management-related designations
         { designation: { contains: 'Manager', mode: 'insensitive' } },
         { designation: { contains: 'Lead', mode: 'insensitive' } },
         { designation: { contains: 'Head', mode: 'insensitive' } },
         { designation: { contains: 'Director', mode: 'insensitive' } },
+        { designation: { contains: 'Supervisor', mode: 'insensitive' } },
+        { designation: { contains: 'Team Lead', mode: 'insensitive' } },
+        // Include HR users who can be reporting managers
+        {
+          user: {
+            role: { in: ['HR', 'ADMIN'] }
+          }
+        }
       ]
     },
     select: {
@@ -39,6 +48,11 @@ async function getManagers() {
       department: {
         select: {
           name: true,
+        }
+      },
+      user: {
+        select: {
+          role: true
         }
       }
     },

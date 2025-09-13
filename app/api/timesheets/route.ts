@@ -281,7 +281,7 @@ export async function POST(request: NextRequest) {
               startTime: entry.startTime,
               endTime: entry.endTime,
               breakDuration: entry.breakDuration,
-              projectId: entry.projectId,
+              projectId: entry.projectId || null, // Ensure null if not provided
               taskDescription: entry.taskDescription,
               billableHours: entry.billableHours,
               nonBillableHours: entry.nonBillableHours,

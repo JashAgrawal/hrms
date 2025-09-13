@@ -41,7 +41,10 @@ interface Location {
 
 interface LocationFormData {
   name: string
+  code: string
   address: string
+  city: string
+  state: string
   latitude: number
   longitude: number
   radius: number
@@ -82,7 +85,10 @@ export default function LocationsPage() {
   const [loadingEmployees, setLoadingEmployees] = useState(false)
   const [formData, setFormData] = useState<LocationFormData>({
     name: '',
+    code: '',
     address: '',
+    city: '',
+    state: '',
     latitude: 0,
     longitude: 0,
     radius: 100,
@@ -101,8 +107,8 @@ export default function LocationsPage() {
       
       if (response.ok) {
         const data = await response.json()
-        // Normalize numeric fields that might arrive as strings/null
-        const normalized = (data.locations || []).map((loc: any) => ({
+        // Use officeLocations from API response and normalize numeric fields
+        const normalized = (data.officeLocations || []).map((loc: any) => ({
           ...loc,
           latitude: typeof loc?.latitude === 'string' ? parseFloat(loc.latitude) : loc?.latitude ?? 0,
           longitude: typeof loc?.longitude === 'string' ? parseFloat(loc.longitude) : loc?.longitude ?? 0,
@@ -159,7 +165,10 @@ export default function LocationsPage() {
   const resetForm = () => {
     setFormData({
       name: '',
+      code: '',
       address: '',
+      city: '',
+      state: '',
       latitude: 0,
       longitude: 0,
       radius: 100,
@@ -333,14 +342,25 @@ export default function LocationsPage() {
               <DialogTitle>Create New Location</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Location Name</Label>
-                <Input
-                  id="name"
-                  placeholder="e.g., Main Office, Branch Office"
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Location Name</Label>
+                  <Input
+                    id="name"
+                    placeholder="e.g., Main Office, Branch Office"
+                    value={formData.name}
+                    onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="code">Location Code</Label>
+                  <Input
+                    id="code"
+                    placeholder="e.g., HO, BO1"
+                    value={formData.code}
+                    onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                  />
+                </div>
               </div>
               
               <div className="space-y-2">
@@ -351,6 +371,27 @@ export default function LocationsPage() {
                   value={formData.address}
                   onChange={(e) => setFormData(prev => ({ ...prev, address: e.target.value }))}
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="city">City</Label>
+                  <Input
+                    id="city"
+                    placeholder="e.g., Mumbai, Delhi"
+                    value={formData.city}
+                    onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="state">State</Label>
+                  <Input
+                    id="state"
+                    placeholder="e.g., Maharashtra, Delhi"
+                    value={formData.state}
+                    onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))}
+                  />
+                </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4">
@@ -416,7 +457,7 @@ export default function LocationsPage() {
                 <Button
                   onClick={handleCreateLocation}
                   className="flex-1"
-                  disabled={!formData.name || !formData.latitude || !formData.longitude}
+                  disabled={!formData.name || !formData.code || !formData.city || !formData.state || !formData.latitude || !formData.longitude}
                 >
                   Create Location
                 </Button>

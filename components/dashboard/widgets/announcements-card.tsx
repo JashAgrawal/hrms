@@ -6,26 +6,9 @@ import { Button } from "@/components/ui/button"
 import { Megaphone, Pin, Calendar, ExternalLink, Bell } from "lucide-react"
 import { useEffect, useState } from "react"
 import { format, parseISO, isToday, isTomorrow, isThisWeek } from "date-fns"
-
-interface Announcement {
-  id: string
-  title: string
-  content: string
-  type: 'GENERAL' | 'URGENT' | 'EVENT' | 'POLICY' | 'CELEBRATION'
-  priority: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT'
-  publishedDate: string
-  expiryDate?: string
-  isPinned: boolean
-  author: {
-    name: string
-    department: string
-  }
-  readBy?: string[]
-  attachments?: {
-    name: string
-    url: string
-  }[]
-}
+import moment from 'moment'
+import { Announcement } from "@prisma/client"
+import Image from "next/image"
 
 export function AnnouncementsCard() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([])
@@ -43,63 +26,9 @@ export function AnnouncementsCard() {
           setUnreadCount(data.unreadCount || 0)
         } else {
           // Mock data if API not available
-          const mockAnnouncements: Announcement[] = [
-            {
-              id: '1',
-              title: 'Quarterly Town Hall Meeting',
-              content: 'Join us for our Q4 town hall meeting this Friday at 3 PM in the main conference room. We\'ll be discussing company updates, achievements, and upcoming initiatives.',
-              type: 'EVENT',
-              priority: 'HIGH',
-              publishedDate: new Date().toISOString(),
-              expiryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-              isPinned: true,
-              author: {
-                name: 'Sarah Johnson',
-                department: 'HR'
-              }
-            },
-            {
-              id: '2',
-              title: 'New Health Insurance Policy',
-              content: 'We\'re excited to announce enhanced health insurance benefits starting January 1st. Please review the updated policy document and submit your preferences by December 15th.',
-              type: 'POLICY',
-              priority: 'MEDIUM',
-              publishedDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
-              isPinned: false,
-              author: {
-                name: 'Mike Chen',
-                department: 'Benefits'
-              }
-            },
-            {
-              id: '3',
-              title: 'Holiday Party - December 20th',
-              content: 'Save the date! Our annual holiday party will be held on December 20th at 6 PM. Food, drinks, and entertainment will be provided. RSVP required.',
-              type: 'CELEBRATION',
-              priority: 'MEDIUM',
-              publishedDate: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
-              isPinned: false,
-              author: {
-                name: 'Events Team',
-                department: 'HR'
-              }
-            },
-            {
-              id: '4',
-              title: 'System Maintenance - Weekend',
-              content: 'Scheduled system maintenance this weekend from Saturday 10 PM to Sunday 6 AM. Some services may be temporarily unavailable.',
-              type: 'GENERAL',
-              priority: 'LOW',
-              publishedDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-              isPinned: false,
-              author: {
-                name: 'IT Team',
-                department: 'Technology'
-              }
-            }
-          ]
-          setAnnouncements(mockAnnouncements)
-          setUnreadCount(2)
+          
+          setAnnouncements([])
+          setUnreadCount(0)
         }
       } catch (error) {
         console.error('Failed to fetch announcements:', error)
@@ -126,20 +55,6 @@ export function AnnouncementsCard() {
         return priority === 'HIGH' || priority === 'URGENT' 
           ? <Badge variant="secondary" className="bg-orange-100 text-orange-800">Important</Badge>
           : <Badge variant="outline">General</Badge>
-    }
-  }
-
-  const formatPublishDate = (dateString: string) => {
-    const date = parseISO(dateString)
-    
-    if (isToday(date)) {
-      return 'Today'
-    } else if (isTomorrow(date)) {
-      return 'Tomorrow'
-    } else if (isThisWeek(date)) {
-      return format(date, 'EEEE')
-    } else {
-      return format(date, 'MMM dd')
     }
   }
 
@@ -201,18 +116,20 @@ export function AnnouncementsCard() {
           </div>
         ) : (
           <div className="space-y-4">
-            {announcements.map((announcement) => (
+            {announcements.map((announcement) => {
+              const currAttachments: { name: string; url: string; size: number; type: string }[] = typeof announcement?.attachments === "string"
+  ? JSON.parse(announcement.attachments)
+  : announcement?.attachments;
+              return(
               <div 
                 key={announcement.id} 
                 className={`
                   p-3 rounded-lg border transition-colors hover:bg-gray-50
-                  ${announcement.isPinned ? 'bg-blue-50 border-blue-200' : 'bg-white'}
+                  
                 `}
               >
                 <div className="flex items-start gap-3">
-                  {announcement.isPinned && (
-                    <Pin className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                  )}
+                  
                   
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between mb-2">
@@ -229,13 +146,16 @@ export function AnnouncementsCard() {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Calendar className="h-3 w-3" />
-                        <span>{formatPublishDate(announcement.publishedDate)}</span>
+                        <span>{moment(announcement.publishedAt || new Date()).fromNow()}</span>
                         <span>•</span>
-                        <span>{announcement.author.name}</span>
+                        <span>{announcement.publishedBy}</span>
                       </div>
                       
-                      {announcement.attachments && announcement.attachments.length > 0 && (
-                        <Button variant="ghost" size="sm" className="h-6 px-2">
+                      {currAttachments && currAttachments.length > 0 && (
+                       
+                        <Button onClick={() => {
+                          window.open(`/dashboard/announcements`, '_blank')
+                        }} variant="ghost" size="sm" className="h-6 px-2">
                           <ExternalLink className="h-3 w-3" />
                         </Button>
                       )}
@@ -243,7 +163,7 @@ export function AnnouncementsCard() {
                   </div>
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         )}
 
@@ -265,16 +185,16 @@ export function AnnouncementsCard() {
 
         {/* Summary Stats */}
         <div className="pt-3 border-t">
-          <div className="grid grid-cols-3 gap-4 text-center">
-            <div>
+          <div className="grid grid-cols-2 gap-4 text-center">
+            {/* <div>
               <p className="text-sm font-semibold">
                 {announcements.filter(a => a.isPinned).length}
               </p>
               <p className="text-xs text-muted-foreground">Pinned</p>
-            </div>
+            </div> */}
             <div>
               <p className="text-sm font-semibold">
-                {announcements.filter(a => a.priority === 'HIGH' || a.priority === 'URGENT').length}
+                {announcements.filter(a => a.priority === 'HIGH' || a.priority === "CRITICAL").length}
               </p>
               <p className="text-xs text-muted-foreground">Important</p>
             </div>

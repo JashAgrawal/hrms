@@ -11,7 +11,7 @@ export async function GET(
 ) {
   const { id } = await params
   let userId: string | undefined
-  let documentId = id
+  const documentId = id
 
   try {
     const session = await auth()

@@ -25,11 +25,44 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const officeLocations = await LocationService.getOfficeLocations()
+    // Get office locations with employee counts
+    const officeLocations = await prisma.officeLocation.findMany({
+      where: { isActive: true },
+      include: {
+        _count: {
+          select: {
+            employeeLocations: {
+              where: { isActive: true }
+            }
+          }
+        }
+      },
+      orderBy: [
+        { isHeadOffice: 'desc' },
+        { name: 'asc' }
+      ]
+    })
+
+    const formattedLocations = officeLocations.map(office => ({
+      id: office.id,
+      name: office.name,
+      code: office.code,
+      address: office.address,
+      city: office.city,
+      state: office.state,
+      latitude: Number(office.latitude),
+      longitude: Number(office.longitude),
+      radius: office.radius,
+      timezone: office.timezone,
+      isActive: office.isActive,
+      createdAt: office.createdAt.toISOString(),
+      updatedAt: office.updatedAt.toISOString(),
+      _count: office._count
+    }))
 
     return NextResponse.json({
       success: true,
-      officeLocations
+      officeLocations: formattedLocations
     })
 
   } catch (error) {

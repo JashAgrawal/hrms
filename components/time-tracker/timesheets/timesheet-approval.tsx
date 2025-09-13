@@ -27,6 +27,7 @@ import {
   History
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
+import { TimesheetWithEmployee, TimeEntryWithProject } from '@/components/time-tracker/shared/prisma-types'
 
 // Validation schema
 const ApprovalSchema = z.object({
@@ -43,39 +44,9 @@ const ApprovalSchema = z.object({
 
 type ApprovalFormData = z.infer<typeof ApprovalSchema>
 
-interface TimeEntry {
-  id: string
-  date: string
-  startTime: string
-  endTime: string
-  breakDuration: number
-  billableHours: number
-  nonBillableHours: number
-  overtimeHours: number
-  taskDescription?: string
-  project?: {
-    id: string
-    name: string
-    code: string
-  }
-}
 
-interface Timesheet {
-  id: string
-  startDate: string
-  endDate: string
-  status: string
-  totalHours: number
-  submittedAt?: string
-  employee: {
-    id: string
-    firstName: string
-    lastName: string
-    employeeId: string
-    department?: { name: string }
-  }
-  entries: TimeEntry[]
-}
+
+
 
 interface ApprovalHistory {
   id: string
@@ -89,7 +60,7 @@ interface ApprovalHistory {
 }
 
 interface TimesheetApprovalProps {
-  timesheet: Timesheet
+  timesheet: TimesheetWithEmployee
   approvalHistory: ApprovalHistory[]
   canApprove: boolean
   onApprove: (data: ApprovalFormData) => Promise<void>
@@ -121,9 +92,9 @@ export function TimesheetApproval({
   const watchedAction = form.watch('action')
 
   // Add adjustment
-  const addAdjustment = (entry: TimeEntry, field: string, newValue: string | number) => {
-    const oldValue = entry[field as keyof TimeEntry] as string | number
-    if (oldValue === newValue) return
+  const addAdjustment = (entry: TimeEntryWithProject, field: string, newValue: string | number) => {
+    const oldValue = entry[field as keyof TimeEntryWithProject] as string | number
+    if (oldValue === newValue || !entry.id) return
 
     const newAdjustment = {
       entryId: entry.id,
@@ -175,14 +146,14 @@ export function TimesheetApproval({
   }
 
   // Calculate totals
-  const totalBillableHours = timesheet.entries.reduce((sum, entry) => sum + entry.billableHours, 0)
-  const totalNonBillableHours = timesheet.entries.reduce((sum, entry) => sum + entry.nonBillableHours, 0)
-  const totalOvertimeHours = timesheet.entries.reduce((sum, entry) => sum + entry.overtimeHours, 0)
+  const totalBillableHours = timesheet.entries.reduce((sum, entry) => sum + Number(entry.billableHours), 0)
+  const totalNonBillableHours = timesheet.entries.reduce((sum, entry) => sum + Number(entry.nonBillableHours), 0)
+  const totalOvertimeHours = timesheet.entries.reduce((sum, entry) => sum + Number(entry.overtimeHours), 0)
 
   // Get unique projects
   const uniqueProjects = Array.from(
     new Set(timesheet.entries.map(e => e.project?.name).filter(Boolean))
-  )
+  ) as string[]
 
   return (
     <Dialog open={true} onOpenChange={() => onClose()}>
@@ -241,20 +212,20 @@ export function TimesheetApproval({
                   <div className="space-y-1">
                     <div className="flex justify-between text-sm">
                       <span>Billable:</span>
-                      <span className="font-medium">{totalBillableHours.toFixed(2)}h</span>
+                      <span className="font-medium">{Number(totalBillableHours).toFixed(2)}h</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span>Non-billable:</span>
-                      <span className="font-medium">{totalNonBillableHours.toFixed(2)}h</span>
+                      <span className="font-medium">{Number(totalNonBillableHours).toFixed(2)}h</span>
                     </div>
                     <div className="flex justify-between text-sm">
                       <span>Overtime:</span>
-                      <span className="font-medium">{totalOvertimeHours.toFixed(2)}h</span>
+                      <span className="font-medium">{Number(totalOvertimeHours).toFixed(2)}h</span>
                     </div>
                     <Separator />
                     <div className="flex justify-between font-semibold">
                       <span>Total:</span>
-                      <span>{timesheet.totalHours.toFixed(2)}h</span>
+                      <span>{Number(timesheet.totalHours).toFixed(2)}h</span>
                     </div>
                   </div>
                 </div>
@@ -350,12 +321,12 @@ export function TimesheetApproval({
                               <Input
                                 type="number"
                                 step="0.25"
-                                defaultValue={entry.billableHours}
+                                defaultValue={Number(entry.billableHours)}
                                 className="w-20"
                                 onChange={(e) => addAdjustment(entry, 'billableHours', parseFloat(e.target.value) || 0)}
                               />
                             ) : (
-                              <span className="font-medium">{entry.billableHours}h</span>
+                              <span className="font-medium">{Number(entry.billableHours)}h</span>
                             )}
                           </TableCell>
                           <TableCell>
@@ -363,12 +334,12 @@ export function TimesheetApproval({
                               <Input
                                 type="number"
                                 step="0.25"
-                                defaultValue={entry.nonBillableHours}
+                                defaultValue={Number(entry.nonBillableHours)}
                                 className="w-20"
                                 onChange={(e) => addAdjustment(entry, 'nonBillableHours', parseFloat(e.target.value) || 0)}
                               />
                             ) : (
-                              <span className="font-medium">{entry.nonBillableHours}h</span>
+                              <span className="font-medium">{Number(entry.nonBillableHours)}h</span>
                             )}
                           </TableCell>
                           <TableCell>
@@ -376,12 +347,12 @@ export function TimesheetApproval({
                               <Input
                                 type="number"
                                 step="0.25"
-                                defaultValue={entry.overtimeHours}
+                                defaultValue={Number(entry.overtimeHours)}
                                 className="w-20"
                                 onChange={(e) => addAdjustment(entry, 'overtimeHours', parseFloat(e.target.value) || 0)}
                               />
                             ) : (
-                              <span className="font-medium">{entry.overtimeHours}h</span>
+                              <span className="font-medium">{Number(entry.overtimeHours)}h</span>
                             )}
                           </TableCell>
                           <TableCell>

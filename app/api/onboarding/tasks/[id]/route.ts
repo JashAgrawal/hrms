@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { emailService } from '@/lib/email-service'
 import { z } from 'zod'
 
 const updateTaskSchema = z.object({
@@ -95,6 +96,9 @@ export async function PATCH(
               include: {
                 department: {
                   select: { name: true }
+                },
+                user: {
+                  select: { email: true }
                 }
               }
             }
@@ -142,16 +146,113 @@ export async function PATCH(
         action: 'UPDATE',
         resource: 'ONBOARDING_TASK',
         resourceId: updatedTask.id,
-        oldValues: { 
+        oldValues: {
           status: workflowTask.status,
           notes: workflowTask.notes
         },
-        newValues: { 
+        newValues: {
           status: validatedData.status,
           notes: validatedData.notes
         }
       }
     })
+
+    // Send email notifications for task completion
+    try {
+      if (validatedData.status === 'COMPLETED' && workflowTask.status !== 'COMPLETED') {
+        const employee = updatedTask.workflow.employee;
+
+        // Notify the employee about task completion
+        if (employee.user?.email) {
+          await emailService.sendEmail({
+            to: employee.user.email,
+            subject: 'Onboarding Task Completed',
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #28a745;">✅ Onboarding Task Completed</h2>
+                <p>Hi ${employee.firstName},</p>
+                <p>Great news! Your onboarding task has been completed:</p>
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                  <p><strong>Task:</strong> ${updatedTask.task.title}</p>
+                  <p><strong>Category:</strong> ${updatedTask.task.category.replace('_', ' ')}</p>
+                  ${updatedTask.task.description ? `<p><strong>Description:</strong> ${updatedTask.task.description}</p>` : ''}
+                  ${validatedData.notes ? `<p><strong>Notes:</strong> ${validatedData.notes}</p>` : ''}
+                </div>
+                <p>You're making great progress with your onboarding! Keep up the good work.</p>
+                <p>Best regards,<br>HR Team</p>
+              </div>
+            `,
+            text: `Hi ${employee.firstName}, Your onboarding task "${updatedTask.task.title}" has been completed. ${validatedData.notes ? `Notes: ${validatedData.notes}` : ''}`
+          });
+        }
+
+        // Notify HR about task completion
+        const hrUsers = await prisma.user.findMany({
+          where: {
+            role: { in: ['HR', 'ADMIN'] },
+            isActive: true
+          },
+          include: { employee: true }
+        });
+
+        for (const hrUser of hrUsers) {
+          if (hrUser.email) {
+            await emailService.sendEmail({
+              to: hrUser.email,
+              subject: 'Onboarding Task Completed',
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #007bff;">📋 Onboarding Task Update</h2>
+                  <p>Hi ${hrUser.employee?.firstName || 'HR Team'},</p>
+                  <p>An onboarding task has been completed:</p>
+                  <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                    <p><strong>Employee:</strong> ${employee.firstName} ${employee.lastName}</p>
+                    <p><strong>Department:</strong> ${employee.department?.name || 'N/A'}</p>
+                    <p><strong>Task:</strong> ${updatedTask.task.title}</p>
+                    <p><strong>Category:</strong> ${updatedTask.task.category.replace('_', ' ')}</p>
+                    ${validatedData.notes ? `<p><strong>Notes:</strong> ${validatedData.notes}</p>` : ''}
+                  </div>
+                  <p>Progress: ${completedRequiredTasks}/${totalRequiredTasks} required tasks completed</p>
+                  ${workflowStatus === 'COMPLETED' ? '<p><strong>🎉 Onboarding workflow completed!</strong></p>' : ''}
+                  <p>Best regards,<br>HR System</p>
+                </div>
+              `,
+              text: `Onboarding task completed by ${employee.firstName} ${employee.lastName}: ${updatedTask.task.title}. Progress: ${completedRequiredTasks}/${totalRequiredTasks} required tasks.`
+            });
+          }
+        }
+      }
+
+      // Send notification if entire workflow is completed
+      if (workflowStatus === 'COMPLETED' && workflowTask.workflow.status !== 'COMPLETED') {
+        const employee = updatedTask.workflow.employee;
+
+        // Congratulate the employee
+        if (employee.user?.email) {
+          await emailService.sendEmail({
+            to: employee.user.email,
+            subject: '🎉 Onboarding Complete - Welcome to the Team!',
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #28a745;">🎉 Congratulations! Your Onboarding is Complete</h2>
+                <p>Hi ${employee.firstName},</p>
+                <p>We're excited to let you know that you've successfully completed your onboarding process!</p>
+                <div style="background-color: #d4edda; padding: 20px; border-radius: 5px; margin: 20px 0; border-left: 4px solid #28a745;">
+                  <p><strong>✅ All onboarding tasks completed</strong></p>
+                  <p><strong>✅ Welcome to ${employee.department?.name || 'the team'}!</strong></p>
+                </div>
+                <p>You're now fully set up and ready to contribute to our team. If you have any questions or need assistance, don't hesitate to reach out to your manager or HR.</p>
+                <p>Welcome aboard!</p>
+                <p>Best regards,<br>HR Team</p>
+              </div>
+            `,
+            text: `Congratulations ${employee.firstName}! You've successfully completed your onboarding process. Welcome to the team!`
+          });
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to send onboarding task notification:', error);
+    }
 
     return NextResponse.json({ task: updatedTask })
   } catch (error) {

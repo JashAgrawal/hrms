@@ -458,6 +458,85 @@ async function main() {
 
   console.log('✅ Locations created')
 
+  // Create office locations for employee assignment
+  const officeLocations = await Promise.all([
+    prisma.officeLocation.upsert({
+      where: { code: 'HO' },
+      update: {},
+      create: {
+        name: 'Head Office',
+        code: 'HO',
+        address: 'Tech Park, Whitefield, Bangalore, Karnataka, India',
+        city: 'Bangalore',
+        state: 'Karnataka',
+        latitude: 12.9716,
+        longitude: 77.5946,
+        radius: 100,
+        timezone: 'Asia/Kolkata',
+        isHeadOffice: true,
+        workingHours: {
+          monday: { start: '09:00', end: '18:00' },
+          tuesday: { start: '09:00', end: '18:00' },
+          wednesday: { start: '09:00', end: '18:00' },
+          thursday: { start: '09:00', end: '18:00' },
+          friday: { start: '09:00', end: '18:00' },
+          saturday: { start: '09:00', end: '14:00' },
+          sunday: { closed: true },
+        },
+      },
+    }),
+    prisma.officeLocation.upsert({
+      where: { code: 'MUM' },
+      update: {},
+      create: {
+        name: 'Mumbai Branch',
+        code: 'MUM',
+        address: 'Bandra Kurla Complex, Mumbai, Maharashtra, India',
+        city: 'Mumbai',
+        state: 'Maharashtra',
+        latitude: 19.0760,
+        longitude: 72.8777,
+        radius: 150,
+        timezone: 'Asia/Kolkata',
+        workingHours: {
+          monday: { start: '09:30', end: '18:30' },
+          tuesday: { start: '09:30', end: '18:30' },
+          wednesday: { start: '09:30', end: '18:30' },
+          thursday: { start: '09:30', end: '18:30' },
+          friday: { start: '09:30', end: '18:30' },
+          saturday: { closed: true },
+          sunday: { closed: true },
+        },
+      },
+    }),
+    prisma.officeLocation.upsert({
+      where: { code: 'DEL' },
+      update: {},
+      create: {
+        name: 'Delhi Office',
+        code: 'DEL',
+        address: 'Connaught Place, New Delhi, Delhi, India',
+        city: 'New Delhi',
+        state: 'Delhi',
+        latitude: 28.6139,
+        longitude: 77.2090,
+        radius: 120,
+        timezone: 'Asia/Kolkata',
+        workingHours: {
+          monday: { start: '09:00', end: '18:00' },
+          tuesday: { start: '09:00', end: '18:00' },
+          wednesday: { start: '09:00', end: '18:00' },
+          thursday: { start: '09:00', end: '18:00' },
+          friday: { start: '09:00', end: '18:00' },
+          saturday: { start: '10:00', end: '15:00' },
+          sunday: { closed: true },
+        },
+      },
+    }),
+  ])
+
+  console.log('✅ Office locations created')
+
   // Create attendance policies
   await Promise.all([
     prisma.attendancePolicy.upsert({
@@ -937,6 +1016,356 @@ async function main() {
   )
 
   console.log('✅ Expense permissions assigned')
+
+  // Create sample projects
+  const projects = await Promise.all([
+    prisma.project.upsert({
+      where: { code: 'PROJ001' },
+      update: {},
+      create: {
+        name: 'E-commerce Platform Development',
+        code: 'PROJ001',
+        description: 'Development of a modern e-commerce platform with React and Node.js',
+        clientName: 'TechCorp Solutions',
+        startDate: new Date('2024-01-15'),
+        endDate: new Date('2024-06-30'),
+        status: 'ACTIVE',
+      },
+    }),
+    prisma.project.upsert({
+      where: { code: 'PROJ002' },
+      update: {},
+      create: {
+        name: 'Mobile Banking App',
+        code: 'PROJ002',
+        description: 'Cross-platform mobile banking application with advanced security features',
+        clientName: 'SecureBank Ltd',
+        startDate: new Date('2024-02-01'),
+        endDate: new Date('2024-08-15'),
+        status: 'ACTIVE',
+      },
+    }),
+    prisma.project.upsert({
+      where: { code: 'PROJ003' },
+      update: {},
+      create: {
+        name: 'HR Management System',
+        code: 'PROJ003',
+        description: 'Comprehensive HR management system with payroll and attendance tracking',
+        clientName: 'Internal Project',
+        startDate: new Date('2024-01-01'),
+        status: 'ACTIVE',
+      },
+    }),
+    prisma.project.upsert({
+      where: { code: 'PROJ004' },
+      update: {},
+      create: {
+        name: 'Data Analytics Dashboard',
+        code: 'PROJ004',
+        description: 'Real-time analytics dashboard for business intelligence',
+        clientName: 'DataViz Inc',
+        startDate: new Date('2023-11-01'),
+        endDate: new Date('2024-01-31'),
+        status: 'COMPLETED',
+      },
+    }),
+    prisma.project.upsert({
+      where: { code: 'PROJ005' },
+      update: {},
+      create: {
+        name: 'Cloud Migration Project',
+        code: 'PROJ005',
+        description: 'Migration of legacy systems to cloud infrastructure',
+        clientName: 'CloudFirst Technologies',
+        startDate: new Date('2024-03-01'),
+        endDate: new Date('2024-09-30'),
+        status: 'ON_HOLD',
+      },
+    }),
+  ])
+
+  console.log('✅ Sample projects created')
+
+  // Add project permissions
+  const projectPermissions = await Promise.all([
+    prisma.permission.upsert({
+      where: { code: 'PROJECT_CREATE' },
+      update: {},
+      create: {
+        name: 'Create Project',
+        code: 'PROJECT_CREATE',
+        module: 'PROJECT',
+        action: 'CREATE',
+        resource: 'ALL',
+        description: 'Create new projects',
+      },
+    }),
+    prisma.permission.upsert({
+      where: { code: 'PROJECT_READ' },
+      update: {},
+      create: {
+        name: 'View Project',
+        code: 'PROJECT_READ',
+        module: 'PROJECT',
+        action: 'READ',
+        resource: 'ALL',
+        description: 'View project information',
+      },
+    }),
+    prisma.permission.upsert({
+      where: { code: 'PROJECT_UPDATE' },
+      update: {},
+      create: {
+        name: 'Update Project',
+        code: 'PROJECT_UPDATE',
+        module: 'PROJECT',
+        action: 'UPDATE',
+        resource: 'ALL',
+        description: 'Update project information',
+      },
+    }),
+    prisma.permission.upsert({
+      where: { code: 'PROJECT_DELETE' },
+      update: {},
+      create: {
+        name: 'Delete Project',
+        code: 'PROJECT_DELETE',
+        module: 'PROJECT',
+        action: 'DELETE',
+        resource: 'ALL',
+        description: 'Delete projects',
+      },
+    }),
+  ])
+
+  // Assign project permissions to roles
+  // Admin gets all project permissions
+  await Promise.all(
+    projectPermissions.map(permission =>
+      prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: adminRole.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: adminRole.id,
+          permissionId: permission.id,
+        },
+      })
+    )
+  )
+
+  // HR role gets project read and create permissions
+  const hrProjectPermissions = projectPermissions.filter(p => 
+    ['PROJECT_READ', 'PROJECT_CREATE', 'PROJECT_UPDATE'].includes(p.code)
+  )
+  await Promise.all(
+    hrProjectPermissions.map(permission =>
+      prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: hrRole.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: hrRole.id,
+          permissionId: permission.id,
+        },
+      })
+    )
+  )
+
+  // Manager role gets project read permissions
+  const managerProjectPermissions = projectPermissions.filter(p => 
+    ['PROJECT_READ', 'PROJECT_CREATE', 'PROJECT_UPDATE'].includes(p.code)
+  )
+  await Promise.all(
+    managerProjectPermissions.map(permission =>
+      prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: managerRole.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: managerRole.id,
+          permissionId: permission.id,
+        },
+      })
+    )
+  )
+
+  // Employee role gets project read permissions
+  const empProjectPermissions = projectPermissions.filter(p => 
+    ['PROJECT_READ'].includes(p.code)
+  )
+  await Promise.all(
+    empProjectPermissions.map(permission =>
+      prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: employeeRole.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: employeeRole.id,
+          permissionId: permission.id,
+        },
+      })
+    )
+  )
+
+  console.log('✅ Project permissions assigned')
+
+  // Add timesheet permissions
+  const timesheetPermissions = await Promise.all([
+    prisma.permission.upsert({
+      where: { code: 'TIMESHEET_CREATE' },
+      update: {},
+      create: {
+        name: 'Create Timesheet',
+        code: 'TIMESHEET_CREATE',
+        module: 'TIMESHEET',
+        action: 'CREATE',
+        resource: 'ALL',
+        description: 'Create timesheets',
+      },
+    }),
+    prisma.permission.upsert({
+      where: { code: 'TIMESHEET_READ' },
+      update: {},
+      create: {
+        name: 'View Timesheet',
+        code: 'TIMESHEET_READ',
+        module: 'TIMESHEET',
+        action: 'READ',
+        resource: 'ALL',
+        description: 'View timesheet information',
+      },
+    }),
+    prisma.permission.upsert({
+      where: { code: 'TIMESHEET_UPDATE' },
+      update: {},
+      create: {
+        name: 'Update Timesheet',
+        code: 'TIMESHEET_UPDATE',
+        module: 'TIMESHEET',
+        action: 'UPDATE',
+        resource: 'ALL',
+        description: 'Update timesheet information',
+      },
+    }),
+    prisma.permission.upsert({
+      where: { code: 'TIMESHEET_APPROVE' },
+      update: {},
+      create: {
+        name: 'Approve Timesheet',
+        code: 'TIMESHEET_APPROVE',
+        module: 'TIMESHEET',
+        action: 'APPROVE',
+        resource: 'ALL',
+        description: 'Approve timesheets',
+      },
+    }),
+  ])
+
+  // Assign timesheet permissions to roles
+  // Admin gets all timesheet permissions
+  await Promise.all(
+    timesheetPermissions.map(permission =>
+      prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: adminRole.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: adminRole.id,
+          permissionId: permission.id,
+        },
+      })
+    )
+  )
+
+  // HR role gets timesheet read and approve permissions
+  const hrTimesheetPermissions = timesheetPermissions.filter(p => 
+    ['TIMESHEET_READ', 'TIMESHEET_APPROVE'].includes(p.code)
+  )
+  await Promise.all(
+    hrTimesheetPermissions.map(permission =>
+      prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: hrRole.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: hrRole.id,
+          permissionId: permission.id,
+        },
+      })
+    )
+  )
+
+  // Manager role gets timesheet read and approve permissions
+  const managerTimesheetPermissions = timesheetPermissions.filter(p => 
+    ['TIMESHEET_READ', 'TIMESHEET_APPROVE'].includes(p.code)
+  )
+  await Promise.all(
+    managerTimesheetPermissions.map(permission =>
+      prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: managerRole.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: managerRole.id,
+          permissionId: permission.id,
+        },
+      })
+    )
+  )
+
+  // Employee role gets timesheet create, read, and update permissions
+  const empTimesheetPermissions = timesheetPermissions.filter(p => 
+    ['TIMESHEET_CREATE', 'TIMESHEET_READ', 'TIMESHEET_UPDATE'].includes(p.code)
+  )
+  await Promise.all(
+    empTimesheetPermissions.map(permission =>
+      prisma.rolePermission.upsert({
+        where: {
+          roleId_permissionId: {
+            roleId: employeeRole.id,
+            permissionId: permission.id,
+          },
+        },
+        update: {},
+        create: {
+          roleId: employeeRole.id,
+          permissionId: permission.id,
+        },
+      })
+    )
+  )
+
+  console.log('✅ Timesheet permissions assigned')
 
   // Seed payroll data
   await seedPayrollData()

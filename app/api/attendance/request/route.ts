@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { emailService } from "@/lib/email-service";
 import { z } from "zod";
 
 const createAttendanceRequestSchema = z.object({
@@ -162,9 +163,84 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    return NextResponse.json({ 
+    // Send email notification to manager/HR
+    try {
+      let notificationSent = false;
+
+      // First try to notify the reporting manager
+      if (employee.reportingTo) {
+        const manager = await prisma.employee.findUnique({
+          where: { id: employee.reportingTo },
+          include: { user: true }
+        });
+
+        if (manager?.user?.email) {
+          await emailService.sendEmail({
+            to: manager.user.email,
+            subject: 'New Attendance Request for Approval',
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #007bff;">📋 New Attendance Request</h2>
+                <p>Hi ${manager.firstName},</p>
+                <p>You have a new attendance request to review:</p>
+                <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                  <p><strong>Employee:</strong> ${employee.firstName} ${employee.lastName} (${employee.employeeCode})</p>
+                  <p><strong>Date:</strong> ${validatedData.date.toDateString()}</p>
+                  <p><strong>Check-in Time:</strong> ${validatedData.checkInTime.toLocaleString()}</p>
+                  <p><strong>Reason:</strong> ${validatedData.reason}</p>
+                </div>
+                <p>Please review and approve/reject this request in the HR system.</p>
+                <p>Best regards,<br>HR System</p>
+              </div>
+            `,
+            text: `Hi ${manager.firstName}, You have a new attendance request from ${employee.firstName} ${employee.lastName} for ${validatedData.date.toDateString()}. Reason: ${validatedData.reason}`
+          });
+          notificationSent = true;
+        }
+      }
+
+      // If no manager or manager notification failed, notify HR
+      if (!notificationSent) {
+        const hrUsers = await prisma.user.findMany({
+          where: {
+            role: { in: ['HR', 'ADMIN'] },
+            isActive: true
+          },
+          include: { employee: true }
+        });
+
+        for (const hrUser of hrUsers) {
+          if (hrUser.email) {
+            await emailService.sendEmail({
+              to: hrUser.email,
+              subject: 'New Attendance Request for Approval',
+              html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                  <h2 style="color: #007bff;">📋 New Attendance Request</h2>
+                  <p>Hi ${hrUser.employee?.firstName || 'HR Team'},</p>
+                  <p>A new attendance request requires approval:</p>
+                  <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 15px 0;">
+                    <p><strong>Employee:</strong> ${employee.firstName} ${employee.lastName} (${employee.employeeCode})</p>
+                    <p><strong>Date:</strong> ${validatedData.date.toDateString()}</p>
+                    <p><strong>Check-in Time:</strong> ${validatedData.checkInTime.toLocaleString()}</p>
+                    <p><strong>Reason:</strong> ${validatedData.reason}</p>
+                  </div>
+                  <p>Please review and approve/reject this request in the HR system.</p>
+                  <p>Best regards,<br>HR System</p>
+                </div>
+              `,
+              text: `Hi ${hrUser.employee?.firstName || 'HR Team'}, New attendance request from ${employee.firstName} ${employee.lastName} for ${validatedData.date.toDateString()}. Reason: ${validatedData.reason}`
+            });
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to send attendance request notification:', error);
+    }
+
+    return NextResponse.json({
       message: "Attendance request submitted successfully",
-      request: attendanceRequest 
+      request: attendanceRequest
     }, { status: 201 });
   } catch (error) {
     if (error instanceof z.ZodError) {

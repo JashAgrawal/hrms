@@ -1,12 +1,13 @@
 import { Suspense } from 'react'
 import { auth } from '@/lib/auth'
 import { redirect } from 'next/navigation'
-import { AttendanceTracker } from '@/components/attendance/attendance-tracker'
+import { UnifiedAttendanceTracker } from '@/components/attendance/unified-attendance-tracker'
 import { AttendanceHistory } from '@/components/attendance/attendance-history'
 import { AttendanceStats } from '@/components/attendance/attendance-stats'
+import { AttendanceAbsenceManager } from '@/components/admin/attendance-absence-manager'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Clock, Calendar, TrendingUp, Users } from 'lucide-react'
+import { Clock, Calendar, TrendingUp, Users, Settings } from 'lucide-react'
 
 export default async function AttendancePage() {
   const session = await auth()
@@ -41,6 +42,12 @@ export default async function AttendancePage() {
               Team
             </TabsTrigger>
           )}
+          {(session.user.role === 'HR' || session.user.role === 'ADMIN') && (
+            <TabsTrigger value="admin" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Admin
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="tracker" className="space-y-4">
@@ -57,12 +64,12 @@ export default async function AttendancePage() {
                 Today's Attendance
               </CardTitle>
               <CardDescription>
-                Mark your attendance and track your work hours
+                Mark your attendance with automatic GPS verification when available
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Suspense fallback={<AttendanceTrackerSkeleton />}>
-                <AttendanceTracker />
+                <UnifiedAttendanceTracker />
               </Suspense>
             </CardContent>
           </Card>
@@ -148,6 +155,12 @@ export default async function AttendancePage() {
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+        )}
+
+        {(session.user.role === 'HR' || session.user.role === 'ADMIN') && (
+          <TabsContent value="admin" className="space-y-4">
+            <AttendanceAbsenceManager />
           </TabsContent>
         )}
       </Tabs>

@@ -582,10 +582,10 @@ function numberToWords(num: number): string {
   }
   
   let result = ''
-  let crore = Math.floor(num / 10000000)
-  let lakh = Math.floor((num % 10000000) / 100000)
-  let thousand = Math.floor((num % 100000) / 1000)
-  let hundred = num % 1000
+  const crore = Math.floor(num / 10000000)
+  const lakh = Math.floor((num % 10000000) / 100000)
+  const thousand = Math.floor((num % 100000) / 1000)
+  const hundred = num % 1000
   
   if (crore > 0) {
     result += convertHundreds(crore) + 'Crore '

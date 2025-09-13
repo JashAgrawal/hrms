@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { emailService } from '@/lib/email-service'
 import { z } from 'zod'
 
 // Schema for attendance request approval
@@ -149,6 +150,29 @@ export async function POST(
         }
       })
 
+      // Send email notification to employee
+      try {
+        if (attendanceRequest.employee.user?.email) {
+          await emailService.sendEmail({
+            to: attendanceRequest.employee.user.email,
+            subject: 'Attendance Request Approved',
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #28a745;">✅ Attendance Request Approved</h2>
+                <p>Hi ${attendanceRequest.employee.firstName},</p>
+                <p>Your attendance request for <strong>${attendanceRequest.date.toDateString()}</strong> has been approved.</p>
+                ${data.comments ? `<p><strong>Comments:</strong> ${data.comments}</p>` : ''}
+                <p>Your attendance has been recorded for the requested date.</p>
+                <p>Best regards,<br>HR Team</p>
+              </div>
+            `,
+            text: `Hi ${attendanceRequest.employee.firstName}, Your attendance request for ${attendanceRequest.date.toDateString()} has been approved. ${data.comments ? `Comments: ${data.comments}` : ''}`
+          })
+        }
+      } catch (error) {
+        console.warn('Failed to send attendance approval email:', error)
+      }
+
       return NextResponse.json({
         success: true,
         attendanceRequest: updatedRequest,
@@ -183,6 +207,29 @@ export async function POST(
           userAgent: request.headers.get('user-agent')
         }
       })
+
+      // Send email notification to employee
+      try {
+        if (attendanceRequest.employee.user?.email) {
+          await emailService.sendEmail({
+            to: attendanceRequest.employee.user.email,
+            subject: 'Attendance Request Rejected',
+            html: `
+              <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2 style="color: #dc3545;">❌ Attendance Request Rejected</h2>
+                <p>Hi ${attendanceRequest.employee.firstName},</p>
+                <p>Your attendance request for <strong>${attendanceRequest.date.toDateString()}</strong> has been rejected.</p>
+                <p><strong>Reason:</strong> ${data.comments || 'No specific reason provided'}</p>
+                <p>Please contact your manager or HR for more information.</p>
+                <p>Best regards,<br>HR Team</p>
+              </div>
+            `,
+            text: `Hi ${attendanceRequest.employee.firstName}, Your attendance request for ${attendanceRequest.date.toDateString()} has been rejected. Reason: ${data.comments || 'No specific reason provided'}`
+          })
+        }
+      } catch (error) {
+        console.warn('Failed to send attendance rejection email:', error)
+      }
 
       return NextResponse.json({
         success: true,

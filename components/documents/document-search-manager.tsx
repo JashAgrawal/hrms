@@ -121,7 +121,7 @@ export function DocumentSearchManager({
 
   // Filter and search documents
   const filteredDocuments = useMemo(() => {
-    let filtered = documents.filter(doc => {
+    const filtered = documents.filter(doc => {
       // Text search
       if (searchTerm) {
         const searchLower = searchTerm.toLowerCase()

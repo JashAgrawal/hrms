@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { format } from 'date-fns'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -13,7 +13,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { 
   Search, 
   Filter, 
-  Plus, 
   Edit, 
   Eye, 
   Trash2, 
@@ -26,56 +25,18 @@ import {
   Send
 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
-
-interface Timesheet {
-  id: string
-  startDate: string
-  endDate: string
-  status: 'DRAFT' | 'SUBMITTED' | 'APPROVED' | 'REJECTED'
-  totalHours: number
-  submittedAt?: string
-  approvedAt?: string
-  rejectedAt?: string
-  rejectionReason?: string
-  employee: {
-    id: string
-    firstName: string
-    lastName: string
-    employeeId: string
-    department?: { name: string }
-  }
-  approver?: {
-    id: string
-    name: string
-  }
-  entries: Array<{
-    id: string
-    date: string
-    startTime: string
-    endTime: string
-    breakDuration: number
-    taskDescription?: string
-    billableHours: number
-    nonBillableHours: number
-    overtimeHours: number
-    project?: {
-      id: string
-      name: string
-      code: string
-    }
-  }>
-}
+import { TimesheetWithEmployee, TimesheetStatus } from '@/components/time-tracker/shared/prisma-types'
 
 interface TimesheetListProps {
-  timesheets: Timesheet[]
+  timesheets: TimesheetWithEmployee[]
   totalCount: number
   currentPage: number
   pageSize: number
   onPageChange: (page: number) => void
   onSearch: (query: string) => void
   onFilter: (filters: { status?: string; employeeId?: string; projectId?: string }) => void
-  onEdit: (timesheet: Timesheet) => void
-  onView: (timesheet: Timesheet) => void
+  onEdit: (timesheet: TimesheetWithEmployee) => void
+  onView: (timesheet: TimesheetWithEmployee) => void
   onDelete: (timesheetIds: string[]) => void
   onBulkApprove: (timesheetIds: string[], action: 'APPROVE' | 'REJECT', comments?: string) => void
   onBulkSubmit: (timesheetIds: string[]) => void
@@ -342,8 +303,8 @@ export function TimesheetList({
                 timesheets.map((timesheet) => {
                   const isSelected = selectedTimesheets.includes(timesheet.id)
                   const uniqueProjects = Array.from(
-                    new Set(timesheet.entries.map(e => e.project?.name).filter(Boolean))
-                  )
+                    new Set(timesheet.entries.map((e: any) => e.project?.name).filter(Boolean))
+                  ) as string[]
 
                   return (
                     <TableRow key={timesheet.id} className={isSelected ? 'bg-muted/50' : ''}>
@@ -382,9 +343,9 @@ export function TimesheetList({
                       </TableCell>
                       <TableCell>
                         <div className="flex flex-col">
-                          <span className="font-medium">{timesheet.totalHours.toFixed(2)}h</span>
+                          <span className="font-medium">{Number(timesheet.totalHours).toFixed(2)}h</span>
                           <span className="text-sm text-muted-foreground">
-                            {timesheet.entries.reduce((sum, e) => sum + e.billableHours, 0).toFixed(1)}h billable
+                            {timesheet.entries.reduce((sum: number, e: any) => sum + Number(e.billableHours), 0).toFixed(1)}h billable
                           </span>
                         </div>
                       </TableCell>

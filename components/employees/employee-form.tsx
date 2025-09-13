@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -8,12 +8,12 @@ import { z } from 'zod'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { EmployeeSelect } from '@/components/ui/employee-select'
+import { useEmployees } from '@/hooks/use-employees'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { toast } from 'sonner'
-import { Loader2, Save, User, Briefcase, DollarSign, FileText } from 'lucide-react'
+import { Loader2, Save, User, Briefcase, DollarSign, FileText, CreditCard } from 'lucide-react'
 import { EmployeeType } from '@prisma/client'
 
 const employeeFormSchema = z.object({
@@ -43,6 +43,11 @@ const employeeFormSchema = z.object({
   aadharNumber: z.string().optional(),
   pfNumber: z.string().optional(),
   esiNumber: z.string().optional(),
+  // Banking Information
+  bankAccountNumber: z.string().optional(),
+  bankIFSC: z.string().optional(),
+  bankName: z.string().optional(),
+  bankBranch: z.string().optional(),
   status: z.enum(['ACTIVE', 'INACTIVE', 'TERMINATED', 'ON_LEAVE']).optional(),
 })
 
@@ -54,16 +59,7 @@ interface Department {
   code: string
 }
 
-interface Manager {
-  id: string
-  firstName: string
-  lastName: string
-  employeeCode: string
-  designation: string
-  department: {
-    name: string
-  }
-}
+
 
 interface Employee {
   id: string
@@ -87,19 +83,35 @@ interface Employee {
   aadharNumber?: string | null
   pfNumber?: string | null
   esiNumber?: string | null
+  // Banking Information
+  bankAccountNumber?: string | null
+  bankIFSC?: string | null
+  bankName?: string | null
+  bankBranch?: string | null
   status: string
 }
 
 interface EmployeeFormProps {
   employee?: Employee
   departments: Department[]
-  managers: Manager[]
+  managers?: any[] // Optional managers prop (not used since we fetch internally)
   isEditing?: boolean
 }
 
-export function EmployeeForm({ employee, departments, managers, isEditing = false }: EmployeeFormProps) {
+export function EmployeeForm({ employee, departments, isEditing = false }: EmployeeFormProps) {
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
+  
+  // Memoize the options to prevent unnecessary re-renders
+  const employeesOptions = useMemo(() => ({
+    limit: 1000, // Fetch a large number of employees for dropdown selection
+    includeInactive: false // Only include active employees
+  }), [])
+
+  // Fetch employees for reporting manager selection
+  const { employees: allEmployees, loading: employeesLoading } = useEmployees(employeesOptions)
+
+
 
   const { control, handleSubmit, formState: { errors } } = useForm({
     resolver: zodResolver(employeeFormSchema),
@@ -130,6 +142,11 @@ export function EmployeeForm({ employee, departments, managers, isEditing = fals
       aadharNumber: employee?.aadharNumber || '',
       pfNumber: employee?.pfNumber || '',
       esiNumber: employee?.esiNumber || '',
+      // Banking Information
+      bankAccountNumber: employee?.bankAccountNumber || '',
+      bankIFSC: employee?.bankIFSC || '',
+      bankName: employee?.bankName || '',
+      bankBranch: employee?.bankBranch || '',
       status: (employee?.status as 'ACTIVE' | 'INACTIVE' | 'TERMINATED' | 'ON_LEAVE') || 'ACTIVE',
     },
   })
@@ -507,17 +524,28 @@ export function EmployeeForm({ employee, departments, managers, isEditing = fals
                 name="reportingTo"
                 control={control}
                 render={({ field }) => (
-                  <EmployeeSelect
-                    employees={managers}
-                    value={field.value}
-                    onValueChange={field.onChange}
-                    placeholder="Select reporting manager"
-                    showDepartment={true}
-                    showEmail={false}
-                    allowClear={true}
-                  />
+                  <Select onValueChange={field.onChange} value={field.value || ""}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select reporting manager" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allEmployees
+                        .filter(emp =>
+                          // Don't allow self-selection when editing
+                          isEditing ? emp.id !== employee?.id : true
+                        )
+                        .map((emp) => (
+                          <SelectItem key={emp.id} value={emp.id}>
+                            {emp.firstName} {emp.lastName} ({emp.employeeCode})
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
                 )}
               />
+              {employeesLoading && (
+                <p className="text-sm text-muted-foreground">Loading employees...</p>
+              )}
             </div>
           </div>
 
@@ -680,6 +708,84 @@ export function EmployeeForm({ employee, departments, managers, isEditing = fals
                   <Input
                     id="esiNumber"
                     placeholder="Enter ESI number"
+                    {...field}
+                  />
+                )}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Banking Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5" />
+            Banking Information
+          </CardTitle>
+          <CardDescription>
+            Bank account details for salary processing
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="bankAccountNumber">Bank Account Number</Label>
+              <Controller
+                name="bankAccountNumber"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    id="bankAccountNumber"
+                    placeholder="Enter bank account number"
+                    {...field}
+                  />
+                )}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="bankIFSC">IFSC Code</Label>
+              <Controller
+                name="bankIFSC"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    id="bankIFSC"
+                    placeholder="Enter IFSC code"
+                    {...field}
+                  />
+                )}
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="bankName">Bank Name</Label>
+              <Controller
+                name="bankName"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    id="bankName"
+                    placeholder="Enter bank name"
+                    {...field}
+                  />
+                )}
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="bankBranch">Bank Branch</Label>
+              <Controller
+                name="bankBranch"
+                control={control}
+                render={({ field }) => (
+                  <Input
+                    id="bankBranch"
+                    placeholder="Enter bank branch"
                     {...field}
                   />
                 )}

@@ -45,7 +45,7 @@ export default function AttendanceRequestsPage() {
       const res = await fetch(`/api/attendance/request/${id}/approve`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action })
+        body: JSON.stringify({ approved: action === 'APPROVE' })
       })
       if (!res.ok) throw new Error('Failed to update request')
       toast({ title: 'Success', description: `Request ${action.toLowerCase()}d` })

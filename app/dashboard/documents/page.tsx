@@ -4,10 +4,10 @@ import { redirect } from 'next/navigation'
 import { prisma } from '@/lib/prisma'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { DocumentWorkflowManager } from '@/components/documents/document-workflow-manager'
-import { DocumentSearchManager } from '@/components/documents/document-search-manager'
-import { DocumentSecurityManager } from '@/components/documents/document-security-manager'
-import { DocumentUpload } from '@/components/employees/document-upload'
+import { DocumentWorkflowWrapper } from '@/components/documents/document-workflow-wrapper'
+import { DocumentSearchWrapper } from '@/components/documents/document-search-wrapper'
+import { DocumentSecurityWrapper } from '@/components/documents/document-security-wrapper'
+import { DocumentUploadWrapper } from '@/components/employees/document-upload-wrapper'
 import { 
   FileText, 
   Upload, 
@@ -29,7 +29,7 @@ async function getDocumentStats(userId: string, userRole: string) {
     })
 
     // Build where clause based on user role
-    let whereClause: any = {}
+    const whereClause: any = {}
     if (!['ADMIN', 'HR'].includes(userRole)) {
       // Non-admin users can only see their own documents
       whereClause.employeeId = user?.employee?.id
@@ -110,7 +110,7 @@ async function getRecentDocuments(userId: string, userRole: string) {
     })
 
     // Build where clause based on user role
-    let whereClause: any = {}
+    const whereClause: any = {}
     if (!['ADMIN', 'HR'].includes(userRole)) {
       whereClause.employeeId = user?.employee?.id
     }
@@ -272,12 +272,8 @@ export default async function DocumentsPage() {
               </CardContent>
             </Card>
           }>
-            <DocumentWorkflowManager 
+            <DocumentWorkflowWrapper
               documents={recentDocuments}
-              onDocumentUpdate={() => {
-                // Refresh the page or refetch data
-                window.location.reload()
-              }}
             />
           </Suspense>
         </TabsContent>
@@ -292,7 +288,7 @@ export default async function DocumentsPage() {
               </CardContent>
             </Card>
           }>
-            <DocumentSearchManager 
+            <DocumentSearchWrapper
               documents={recentDocuments}
               showEmployeeFilter={isAdminOrHR}
             />
@@ -316,12 +312,8 @@ export default async function DocumentsPage() {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
                 </div>
               }>
-                <DocumentUpload
+                <DocumentUploadWrapper
                   employeeId={session.user.employeeId}
-                  onDocumentsChange={() => {
-                    // Refresh the page or refetch data
-                    window.location.reload()
-                  }}
                 />
               </Suspense>
             </CardContent>
@@ -339,12 +331,7 @@ export default async function DocumentsPage() {
                 </CardContent>
               </Card>
             }>
-              <DocumentSecurityManager 
-                onSettingsUpdate={() => {
-                  // Refresh the page or refetch data
-                  window.location.reload()
-                }}
-              />
+              <DocumentSecurityWrapper />
             </Suspense>
           </TabsContent>
         )}

@@ -48,6 +48,15 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     { module: "DOCUMENT", action: "UPDATE", resource: "ALL" },
     { module: "DOCUMENT", action: "DELETE", resource: "ALL" },
     
+    // Project & Time Tracking Management
+    { module: "PROJECT", action: "CREATE", resource: "ALL" },
+    { module: "PROJECT", action: "READ", resource: "ALL" },
+    { module: "PROJECT", action: "UPDATE", resource: "ALL" },
+    { module: "PROJECT", action: "DELETE", resource: "ALL" },
+    { module: "TIMESHEET", action: "READ", resource: "ALL" },
+    { module: "TIMESHEET", action: "APPROVE", resource: "ALL" },
+    { module: "TIMESHEET", action: "REJECT", resource: "ALL" },
+    
     // Reports
     { module: "REPORT", action: "READ", resource: "HR" },
     { module: "REPORT", action: "GENERATE", resource: "HR" }
@@ -76,6 +85,14 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     { module: "EXPENSE", action: "READ", resource: "CLAIM" }, // Own team only
     { module: "EXPENSE", action: "APPROVE", resource: "CLAIM" },
     { module: "EXPENSE", action: "REJECT", resource: "CLAIM" },
+    
+    // Project & Time Tracking Management
+    { module: "PROJECT", action: "CREATE", resource: "ALL" },
+    { module: "PROJECT", action: "READ", resource: "ALL" },
+    { module: "PROJECT", action: "UPDATE", resource: "ALL" },
+    { module: "TIMESHEET", action: "READ", resource: "TEAM" }, // Own team only
+    { module: "TIMESHEET", action: "APPROVE", resource: "TEAM" },
+    { module: "TIMESHEET", action: "REJECT", resource: "TEAM" },
     
     // Reports
     { module: "REPORT", action: "READ", resource: "TEAM" },
@@ -135,7 +152,14 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     { module: "DOCUMENT", action: "CREATE", resource: "OWN" },
     
     // Own Payroll
-    { module: "PAYROLL", action: "READ", resource: "OWN" }
+    { module: "PAYROLL", action: "READ", resource: "OWN" },
+    
+    // Project & Time Tracking (Own data)
+    { module: "PROJECT", action: "READ", resource: "ALL" }, // Can view all projects to log time
+    { module: "TIMESHEET", action: "CREATE", resource: "OWN" },
+    { module: "TIMESHEET", action: "READ", resource: "OWN" }, // Own timesheets only
+    { module: "TIMESHEET", action: "UPDATE", resource: "OWN" }, // Own pending timesheets only
+    { module: "TIMESHEET", action: "DELETE", resource: "OWN" } // Own pending timesheets only
   ]
 }
 
