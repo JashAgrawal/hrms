@@ -55,34 +55,8 @@ export function LeaveReportCard() {
           const balanceData = await balanceResponse.json()
           balances = balanceData.balances || []
         } else {
-          // Mock data if API not available
-          balances = [
-            {
-              type: 'Annual Leave',
-              allocated: 20,
-              used: 8,
-              remaining: 12,
-              carryForward: 2
-            },
-            {
-              type: 'Sick Leave',
-              allocated: 10,
-              used: 3,
-              remaining: 7
-            },
-            {
-              type: 'Personal Leave',
-              allocated: 5,
-              used: 1,
-              remaining: 4
-            },
-            {
-              type: 'Maternity/Paternity',
-              allocated: 90,
-              used: 0,
-              remaining: 90
-            }
-          ]
+          console.error('Failed to fetch leave balances:', balanceResponse.status)
+          balances = []
         }
 
         // Fetch recent leave requests
@@ -100,25 +74,8 @@ export function LeaveReportCard() {
             status: request.status
           }))
         } else {
-          // Mock data if API not available
-          recentLeaves = [
-            {
-              id: '1',
-              type: 'Annual Leave',
-              startDate: '2024-12-23',
-              endDate: '2024-12-27',
-              days: 5,
-              status: 'APPROVED'
-            },
-            {
-              id: '2',
-              type: 'Sick Leave',
-              startDate: '2024-11-15',
-              endDate: '2024-11-15',
-              days: 1,
-              status: 'APPROVED'
-            }
-          ]
+          console.error('Failed to fetch recent leaves:', leaveResponse.status)
+          recentLeaves = []
         }
 
         // Calculate totals

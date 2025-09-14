@@ -32,7 +32,7 @@ export async function GET(request: NextRequest) {
     const next30Days = addDays(now, 30)
 
     // Build team member query based on user role
-    let teamMemberCondition: any = {
+    const teamMemberCondition: any = {
       user: { isActive: true }
     }
 

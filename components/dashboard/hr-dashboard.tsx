@@ -1,7 +1,8 @@
-import { 
-  Users, 
-  UserPlus, 
-  Calendar, 
+"use client"
+import {
+  Users,
+  UserPlus,
+  Calendar,
   FileText,
   TrendingUp,
   AlertCircle,
@@ -10,82 +11,122 @@ import {
 import { StatsCard } from "./widgets/stats-card"
 import { QuickActions } from "./widgets/quick-actions"
 import { RecentActivity } from "./widgets/recent-activity"
+import { useEffect, useState } from "react"
 
-// Mock data - in real app, this would come from API
-const mockStats = {
-  totalEmployees: 1247,
-  newHires: 8,
-  pendingOnboarding: 5,
-  leaveRequests: 12,
-  attendanceIssues: 3,
-  documentsToReview: 7
+interface HRDashboardStats {
+  totalEmployees: number
+  newHires: number
+  pendingOnboarding: number
+  leaveRequests: number
+  attendanceIssues: number
+  documentsToReview: number
 }
 
-const mockActivities = [
-  {
-    id: "1",
-    user: { name: "John Smith", avatar: "" },
-    action: "submitted leave request",
-    target: "Annual Leave (5 days)",
-    timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000),
-    status: "info" as const
-  },
-  {
-    id: "2",
-    user: { name: "Emma Wilson", avatar: "" },
-    action: "completed onboarding",
-    target: "Day 3 of 5",
-    timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000),
-    status: "success" as const
-  },
-  {
-    id: "3",
-    user: { name: "Michael Brown", avatar: "" },
-    action: "uploaded document",
-    target: "Medical Certificate",
-    timestamp: new Date(Date.now() - 5 * 60 * 60 * 1000),
-    status: "info" as const
-  },
-  {
-    id: "4",
-    user: { name: "Sarah Davis", avatar: "" },
-    action: "marked attendance",
-    target: "Late arrival (9:15 AM)",
-    timestamp: new Date(Date.now() - 7 * 60 * 60 * 1000),
-    status: "warning" as const
-  }
-]
-
-const quickActions = [
-  {
-    title: "Review Leave Requests",
-    description: `${mockStats.leaveRequests} pending approvals`,
-    href: "/dashboard/leave/requests",
-    icon: Calendar,
-    variant: "default" as const
-  },
-  {
-    title: "Employee Onboarding",
-    description: `${mockStats.pendingOnboarding} employees in progress`,
-    href: "/dashboard/onboarding",
-    icon: UserPlus,
-    variant: "secondary" as const
-  },
-  {
-    title: "Attendance Issues",
-    description: `${mockStats.attendanceIssues} issues to resolve`,
-    href: "/dashboard/attendance/issues",
-    icon: AlertCircle
-  },
-  {
-    title: "Document Review",
-    description: `${mockStats.documentsToReview} documents pending`,
-    href: "/dashboard/documents/review",
-    icon: FileText
-  }
-]
+interface Activity {
+  id: string
+  user: { name: string; avatar: string }
+  action: string
+  target: string
+  timestamp: Date
+  status: 'success' | 'warning' | 'error' | 'info'
+}
 
 export function HRDashboard() {
+  const [stats, setStats] = useState<HRDashboardStats | null>(null)
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true)
+
+        // Fetch HR dashboard statistics
+        const statsResponse = await fetch('/api/dashboard/hr/stats')
+        if (statsResponse.ok) {
+          const statsData = await statsResponse.json()
+          setStats(statsData)
+        } else {
+          console.error('Failed to fetch HR dashboard stats')
+        }
+
+        // Fetch recent activities (HR-specific activities)
+        const activitiesResponse = await fetch('/api/dashboard/activities?limit=10')
+        if (activitiesResponse.ok) {
+          const activitiesData = await activitiesResponse.json()
+          setActivities(activitiesData.activities || [])
+        } else {
+          console.error('Failed to fetch activities')
+        }
+      } catch (error) {
+        console.error('Error fetching HR dashboard data:', error)
+        setError('Failed to load dashboard data')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchDashboardData()
+  }, [])
+  // Generate quick actions based on current stats
+  const quickActions = [
+    {
+      title: "Review Leave Requests",
+      description: `${stats?.leaveRequests || 0} pending approvals`,
+      href: "/dashboard/leave/requests",
+      icon: Calendar,
+      variant: "default" as const
+    },
+    {
+      title: "Employee Onboarding",
+      description: `${stats?.pendingOnboarding || 0} employees in progress`,
+      href: "/dashboard/onboarding",
+      icon: UserPlus,
+      variant: "secondary" as const
+    },
+    {
+      title: "Attendance Issues",
+      description: `${stats?.attendanceIssues || 0} issues to resolve`,
+      href: "/dashboard/attendance/issues",
+      icon: AlertCircle
+    },
+    {
+      title: "Document Review",
+      description: `${stats?.documentsToReview || 0} documents pending`,
+      href: "/dashboard/documents/review",
+      icon: FileText
+    }
+  ]
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold tracking-tight">HR Dashboard</h1>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-32 bg-gray-100 animate-pulse rounded-lg" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold tracking-tight">HR Dashboard</h1>
+        </div>
+        <div className="text-center py-8">
+          <p className="text-red-600">{error}</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       {/* Welcome Section */}
@@ -100,7 +141,7 @@ export function HRDashboard() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
           title="Total Employees"
-          value={mockStats.totalEmployees.toLocaleString()}
+          value={(stats?.totalEmployees || 0).toLocaleString()}
           description="Active workforce"
           icon={Users}
           trend={{
@@ -111,7 +152,7 @@ export function HRDashboard() {
         />
         <StatsCard
           title="New Hires"
-          value={mockStats.newHires}
+          value={stats?.newHires || 0}
           description="This month"
           icon={UserPlus}
           trend={{
@@ -122,13 +163,13 @@ export function HRDashboard() {
         />
         <StatsCard
           title="Leave Requests"
-          value={mockStats.leaveRequests}
+          value={stats?.leaveRequests || 0}
           description="Pending approval"
           icon={Calendar}
         />
         <StatsCard
           title="Onboarding Progress"
-          value={`${mockStats.pendingOnboarding}/8`}
+          value={`${stats?.pendingOnboarding || 0}`}
           description="In progress"
           icon={CheckCircle}
         />
@@ -143,9 +184,9 @@ export function HRDashboard() {
 
         {/* Recent Activity */}
         <div className="lg:col-span-2">
-          <RecentActivity 
-            title="Recent Employee Activity" 
-            activities={mockActivities}
+          <RecentActivity
+            title="Recent Employee Activity"
+            activities={activities}
             maxItems={6}
           />
         </div>

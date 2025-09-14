@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
     const isEmployee = currentUser.role === 'EMPLOYEE'
     const isManager = ['MANAGER', 'HR', 'ADMIN'].includes(currentUser.role)
     
-    let whereCondition: any = {}
+    const whereCondition: any = {}
     
     if (isEmployee) {
       // Employee sees only their own data

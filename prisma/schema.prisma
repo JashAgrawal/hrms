@@ -211,6 +211,7 @@ model Employee {
   
   // Timesheet Relations
   timesheets         Timesheet[]
+  timesheetTemplates TimesheetTemplate[]
   
   // Site Relations (for Field Employees)
   siteVisits         SiteVisit[]
@@ -232,6 +233,9 @@ model Employee {
   objectives             Objective[]
   feedbacksGiven         Feedback[]              @relation("FeedbackReviewer")
   feedbacksReceived      Feedback[]              @relation("FeedbackEmployee")
+
+  // Optional Leave Relations
+  optionalLeaveSelections EmployeeOptionalLeaveSelection[]
 
   @@index([departmentId])
   @@index([status])
@@ -520,7 +524,8 @@ model Project {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  timeEntries TimeEntry[]
+  timeEntries         TimeEntry[]
+  templateEntries     TimesheetTemplateEntry[]
 
   @@index([status])
   @@map("projects")
@@ -575,6 +580,46 @@ model TimeEntry {
   @@index([employeeId, date])
   @@index([projectId])
   @@map("time_entries")
+}
+
+model TimesheetTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  employeeId  String
+  isDefault   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  employee Employee                   @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  entries  TimesheetTemplateEntry[]
+
+  @@unique([employeeId, name])
+  @@index([employeeId, isDefault])
+  @@map("timesheet_templates")
+}
+
+model TimesheetTemplateEntry {
+  id               String   @id @default(cuid())
+  templateId       String
+  dayOfWeek        Int      // 0 = Sunday, 1 = Monday, etc.
+  startTime        String   // HH:MM format
+  endTime          String   // HH:MM format
+  breakDuration    Int      @default(0) // Break duration in minutes
+  projectId        String?
+  taskDescription  String?
+  billableHours    Decimal  @db.Decimal(4, 2)
+  nonBillableHours Decimal  @db.Decimal(4, 2) @default(0)
+  overtimeHours    Decimal  @db.Decimal(4, 2) @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  template TimesheetTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  project  Project?           @relation(fields: [projectId], references: [id])
+
+  @@unique([templateId, dayOfWeek])
+  @@index([templateId])
+  @@map("timesheet_template_entries")
 }
 
 // Leave Management
@@ -685,6 +730,84 @@ model LeaveApproval {
   @@unique([leaveRequestId, level])
   @@index([approverId, status])
   @@map("leave_approvals")
+}
+
+// Holiday Management
+model Holiday {
+  id          String      @id @default(cuid())
+  name        String
+  date        DateTime    @db.Date
+  type        HolidayType @default(PUBLIC)
+  description String?
+  isOptional  Boolean     @default(false)
+  isActive    Boolean     @default(true)
+  year        Int         // Calendar year for easier querying
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations for optional leave policies
+  optionalLeavePolicyHolidays OptionalLeavePolicyHoliday[]
+  employeeOptionalLeaveSelections EmployeeOptionalLeaveSelection[]
+
+  @@unique([name, date])
+  @@index([date, isActive])
+  @@index([year, isActive])
+  @@map("holidays")
+}
+
+// Optional Leave Policy - Defines a set of festivals where employees can choose n from k
+model OptionalLeavePolicy {
+  id                String   @id @default(cuid())
+  name              String   @unique // e.g., "Festival Holidays 2024"
+  description       String?
+  year              Int      // Calendar year
+  maxSelectableLeaves Int    // n - maximum leaves an employee can select
+  isActive          Boolean  @default(true)
+  selectionDeadline DateTime? // Deadline for employees to make their selections
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  // Relations
+  holidays          OptionalLeavePolicyHoliday[] // k - available festivals
+  employeeSelections EmployeeOptionalLeaveSelection[]
+
+  @@index([year, isActive])
+  @@map("optional_leave_policies")
+}
+
+// Junction table for holidays included in an optional leave policy
+model OptionalLeavePolicyHoliday {
+  id        String   @id @default(cuid())
+  policyId  String
+  holidayId String
+  createdAt DateTime @default(now())
+
+  // Relations
+  policy  OptionalLeavePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  holiday Holiday             @relation(fields: [holidayId], references: [id], onDelete: Cascade)
+
+  @@unique([policyId, holidayId])
+  @@map("optional_leave_policy_holidays")
+}
+
+// Employee selections for optional leave policies
+model EmployeeOptionalLeaveSelection {
+  id         String   @id @default(cuid())
+  employeeId String
+  policyId   String
+  holidayId  String
+  selectedAt DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  employee Employee            @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  policy   OptionalLeavePolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+  holiday  Holiday             @relation(fields: [holidayId], references: [id], onDelete: Cascade)
+
+  @@unique([employeeId, policyId, holidayId])
+  @@index([employeeId, policyId])
+  @@map("employee_optional_leave_selections")
 }
 
 // Payroll Management
@@ -1576,6 +1699,23 @@ model DocumentRetentionPolicy {
   @@map("document_retention_policies")
 }
 
+model SecuritySettings {
+  id                    String   @id @default(cuid())
+  encryptionEnabled     Boolean  @default(true)
+  watermarkEnabled      Boolean  @default(false)
+  accessLoggingEnabled  Boolean  @default(true)
+  downloadRestrictions  Boolean  @default(false)
+  ipWhitelist           Json     @default("[]") // Array of IP addresses
+  maxFileSize           Int      @default(10485760) // 10MB in bytes
+  allowedFileTypes      Json     @default("[\"pdf\", \"doc\", \"docx\", \"xls\", \"xlsx\", \"jpg\", \"jpeg\", \"png\"]") // Array of file extensions
+  passwordProtection    Boolean  @default(false)
+  expiryEnforcement     Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@map("security_settings")
+}
+
 // Employee Onboarding System
 model OnboardingTemplate {
   id          String   @id @default(cuid())
@@ -1748,6 +1888,14 @@ enum AccrualType {
 enum HalfDayType {
   FIRST_HALF
   SECOND_HALF
+}
+
+enum HolidayType {
+  PUBLIC
+  COMPANY
+  OPTIONAL
+  RELIGIOUS
+  NATIONAL
 }
 
 enum PayrollStatus {

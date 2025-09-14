@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     const now = new Date()
 
     // Build query conditions based on user role
-    let whereCondition: any = {
+    const whereCondition: any = {
       status: 'PENDING'
     }
 

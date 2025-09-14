@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     const endDate = new Date(endParam)
 
     // Build query conditions based on user role
-    let whereCondition: any = {
+    const whereCondition: any = {
       status: { in: ['APPROVED', 'PENDING'] }, // Show approved and pending leaves
       OR: [
         // Leaves that start within the date range

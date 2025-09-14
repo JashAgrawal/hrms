@@ -1,8 +1,8 @@
 "use client"
-import { 
-  Clock, 
-  Calendar, 
-  DollarSign, 
+import {
+  Clock,
+  Calendar,
+  DollarSign,
   Receipt,
   Target,
   FileText,
@@ -11,9 +11,9 @@ import {
   Megaphone,
   Users
 } from "lucide-react"
-import { 
-  StatsCard, 
-  QuickActions, 
+import {
+  StatsCard,
+  QuickActions,
   RecentActivity,
   YourInfoCard,
   HolidaysUpcomingLeavesCard,
@@ -26,134 +26,120 @@ import {
 } from "./widgets"
 import { useEffect, useState } from "react"
 
-// Mock data - in real app, this would come from API
-const mockStats = {
-  attendanceRate: 96.5,
-  leaveBalance: 18,
-  pendingExpenses: 2,
-  lastSalary: 85000,
-  performanceRating: 4.2,
-  documentsToSubmit: 1
+interface DashboardStats {
+  attendanceRate: number
+  leaveBalance: number
+  pendingExpenses: number
+  lastSalary: number
+  performanceRating: number
+  documentsToSubmit: number
 }
 
-const mockActivities = [
-  {
-    id: "1",
-    user: { name: "You", avatar: "" },
-    action: "checked in",
-    target: "9:00 AM",
-    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000),
-    status: "success" as const
-  },
-  {
-    id: "2",
-    user: { name: "HR Team", avatar: "" },
-    action: "approved your leave request",
-    target: "Dec 25-26",
-    timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000),
-    status: "success" as const
-  },
-  {
-    id: "3",
-    user: { name: "Finance Team", avatar: "" },
-    action: "processed your expense",
-    target: "₹2,500 reimbursement",
-    timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000),
-    status: "success" as const
-  },
-  {
-    id: "4",
-    user: { name: "You", avatar: "" },
-    action: "updated OKR progress",
-    target: "Q4 Goals - 80%",
-    timestamp: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000),
-    status: "info" as const
-  }
-]
-
-const quickActions = [
-  {
-    title: "Mark Attendance",
-    description: "Check in/out for today",
-    href: "/dashboard/attendance",
-    icon: Clock,
-    variant: "default" as const
-  },
-  {
-    title: "Apply for Leave",
-    description: `${mockStats.leaveBalance} days available`,
-    href: "/dashboard/leave/apply",
-    icon: Calendar,
-    variant: "secondary" as const
-  },
-  {
-    title: "Submit Expense",
-    description: "Upload receipts and claim expenses",
-    href: "/dashboard/expenses/new",
-    icon: Receipt
-  },
-  {
-    title: "View Payslip",
-    description: "Download latest salary slip",
-    href: "/dashboard/payroll/payslips",
-    icon: DollarSign
-  }
-]
+interface Activity {
+  id: string
+  user: { name: string; avatar: string }
+  action: string
+  target: string
+  timestamp: Date
+  status: 'success' | 'warning' | 'error'
+}
 
 export function EmployeeDashboard() {
-  const [upcomingLeaves, setUpcomingLeaves] = useState<{ name: string; date: string }[]>([])
-  const [todayOnLeave, setTodayOnLeave] = useState<{ name: string }[]>([])
-  const [pendingTasks, setPendingTasks] = useState<number>(0)
-  const [announcements, setAnnouncements] = useState<{ id: string; title: string; date: string }[]>([])
+  const [stats, setStats] = useState<DashboardStats | null>(null)
+  const [activities, setActivities] = useState<Activity[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    const fetchData = async () => {
+    const fetchDashboardData = async () => {
       try {
-        const res = await fetch('/api/leave/requests?status=APPROVED&limit=50')
-        if (res.ok) {
-          const data = await res.json()
-          const now = new Date()
-          const upcoming = (data.requests || [])
-            .filter((r: any) => new Date(r.startDate) >= now)
-            .slice(0, 5)
-            .map((r: any) => ({
-              name: `${r.employee.firstName} ${r.employee.lastName}`,
-              date: new Date(r.startDate).toLocaleDateString()
-            }))
-          setUpcomingLeaves(upcoming)
+        setLoading(true)
 
-          // Who is on leave today
-          const today = new Date(); today.setHours(0,0,0,0)
-          const onLeave = (data.requests || [])
-            .filter((r: any) => {
-              const s = new Date(r.startDate); const e = new Date(r.endDate)
-              const sd = new Date(s.getFullYear(), s.getMonth(), s.getDate())
-              const ed = new Date(e.getFullYear(), e.getMonth(), e.getDate())
-              return today >= sd && today <= ed
-            })
-            .slice(0, 10)
-            .map((r: any) => ({ name: `${r.employee.firstName} ${r.employee.lastName}` }))
-          setTodayOnLeave(onLeave)
+        // Fetch dashboard statistics
+        const statsResponse = await fetch('/api/dashboard/employee/stats')
+        if (statsResponse.ok) {
+          const statsData = await statsResponse.json()
+          setStats(statsData)
+        } else {
+          console.error('Failed to fetch dashboard stats')
         }
-      } catch {}
 
-      try {
-        const wf = await fetch('/api/onboarding/workflows')
-        if (wf.ok) {
-          const data = await wf.json()
-          const myPending = (data.workflows || [])
-            .flatMap((w: any) => w.tasks || [])
-            .filter((t: any) => t.status === 'PENDING').length
-          setPendingTasks(myPending)
+        // Fetch recent activities
+        const activitiesResponse = await fetch('/api/dashboard/activities?limit=5')
+        if (activitiesResponse.ok) {
+          const activitiesData = await activitiesResponse.json()
+          setActivities(activitiesData.activities || [])
+        } else {
+          console.error('Failed to fetch activities')
         }
-      } catch {}
-
-      setAnnouncements([
-        { id: '1', title: 'Quarterly Townhall on Friday', date: new Date().toLocaleDateString() }
-      ])
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error)
+        setError('Failed to load dashboard data')
+      } finally {
+        setLoading(false)
+      }
     }
-    fetchData()
+
+    fetchDashboardData()
   }, [])
+
+  // Generate quick actions based on current stats
+  const quickActions = [
+    {
+      title: "Mark Attendance",
+      description: "Check in/out for today",
+      href: "/dashboard/attendance",
+      icon: Clock,
+      variant: "default" as const
+    },
+    {
+      title: "Apply for Leave",
+      description: `${stats?.leaveBalance || 0} days available`,
+      href: "/dashboard/leave/apply",
+      icon: Calendar,
+      variant: "secondary" as const
+    },
+    {
+      title: "Submit Expense",
+      description: "Upload receipts and claim expenses",
+      href: "/dashboard/expenses",
+      icon: Receipt
+    },
+    {
+      title: "View Payslip",
+      description: "Download latest salary slip",
+      href: "/dashboard/payroll/my-payslips",
+      icon: DollarSign
+    }
+  ]
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="h-32 bg-gray-100 animate-pulse rounded-lg" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+        </div>
+        <div className="text-center py-8">
+          <p className="text-red-600">{error}</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -166,10 +152,10 @@ export function EmployeeDashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      {/* <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <StatsCard
           title="Attendance Rate"
-          value={`${mockStats.attendanceRate}%`}
+          value={`${stats?.attendanceRate || 0}%`}
           description="This month"
           icon={Clock}
           trend={{
@@ -180,28 +166,34 @@ export function EmployeeDashboard() {
         />
         <StatsCard
           title="Leave Balance"
-          value={mockStats.leaveBalance}
+          value={stats?.leaveBalance || 0}
           description="Days remaining"
           icon={Calendar}
         />
         <StatsCard
           title="Last Salary"
-          value={`₹${(mockStats.lastSalary / 1000)}K`}
-          description="December 2024"
+          value={`₹${((stats?.lastSalary || 0) / 1000).toFixed(0)}K`}
+          description="Latest payslip"
           icon={DollarSign}
         />
         <StatsCard
           title="Performance"
-          value={`${mockStats.performanceRating}/5`}
+          value={stats?.performanceRating ? `${stats.performanceRating}/5` : 'N/A'}
           description="Current rating"
           icon={Target}
-          trend={{
+          trend={stats?.performanceRating ? {
             value: 5.2,
             label: "from last review",
             isPositive: true
-          }}
+          } : undefined}
         />
-      </div>
+      </div> */}
+
+      {/* Quick Actions */}
+      {/* <QuickActions title="Quick Actions" actions={quickActions} /> */}
+
+      {/* Recent Activity */}
+      {/* <RecentActivity title="Recent Activity" activities={activities} /> */}
 
       {/* Bento Grid Dashboard Layout */}
       {/*
@@ -271,7 +263,7 @@ export function EmployeeDashboard() {
         <div className="col-span-1 md:col-span-4 lg:col-span-8">
           <RecentActivity
             title="Recent Activity"
-            activities={mockActivities}
+            activities={activities}
             maxItems={6}
           />
         </div>
@@ -310,7 +302,7 @@ export function EmployeeDashboard() {
           <div className="space-y-3">
             <StatsCard
               title="Pending Expenses"
-              value={mockStats.pendingExpenses}
+              value={stats?.pendingExpenses || 0}
               description="Claims submitted"
               icon={Receipt}
             />
@@ -335,13 +327,13 @@ export function EmployeeDashboard() {
           <div className="space-y-3">
             <StatsCard
               title="On Leave Today"
-              value={todayOnLeave.length}
-              description={todayOnLeave.slice(0,3).map(p => p.name).join(', ') || '—'}
+              value={0}
+              description="No one on leave"
               icon={Users}
             />
             <StatsCard
               title="Pending Tasks"
-              value={pendingTasks}
+              value={stats?.documentsToSubmit || 0}
               description="Onboarding/assigned tasks"
               icon={FileText}
             />

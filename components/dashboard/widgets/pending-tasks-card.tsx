@@ -45,91 +45,10 @@ export function PendingTasksCard() {
           setTotalTasks(data.totalCount || 0)
           setOverdueTasks(data.overdueCount || 0)
         } else {
-          // Mock data if API not available
-          const mockTasks: PendingTask[] = [
-            {
-              id: '1',
-              title: 'Complete IT Security Training',
-              description: 'Mandatory cybersecurity awareness training for all employees',
-              type: 'TRAINING',
-              priority: 'HIGH',
-              dueDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-              assignedBy: {
-                name: 'IT Security Team',
-                role: 'Administrator'
-              },
-              status: 'PENDING',
-              progress: 0,
-              estimatedTime: '45 minutes'
-            },
-            {
-              id: '2',
-              title: 'Submit Expense Report',
-              description: 'Submit your November expense report with receipts',
-              type: 'DOCUMENT',
-              priority: 'MEDIUM',
-              dueDate: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-              assignedBy: {
-                name: 'Finance Team',
-                role: 'Finance'
-              },
-              status: 'IN_PROGRESS',
-              progress: 60,
-              estimatedTime: '15 minutes'
-            },
-            {
-              id: '3',
-              title: 'Annual Performance Review',
-              description: 'Complete your self-assessment for the annual performance review',
-              type: 'REVIEW',
-              priority: 'HIGH',
-              dueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-              assignedBy: {
-                name: 'Sarah Johnson',
-                role: 'HR Manager'
-              },
-              status: 'PENDING',
-              progress: 0,
-              estimatedTime: '2 hours'
-            },
-            {
-              id: '4',
-              title: 'Update Emergency Contact',
-              description: 'Please update your emergency contact information in the system',
-              type: 'COMPLIANCE',
-              priority: 'MEDIUM',
-              dueDate: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-              assignedBy: {
-                name: 'HR Team',
-                role: 'HR'
-              },
-              status: 'OVERDUE',
-              progress: 0,
-              estimatedTime: '5 minutes'
-            },
-            {
-              id: '5',
-              title: 'Approve Team Leave Request',
-              description: 'Review and approve John Doe\'s leave request for next week',
-              type: 'APPROVAL',
-              priority: 'MEDIUM',
-              dueDate: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
-              assignedBy: {
-                name: 'System',
-                role: 'Automated'
-              },
-              status: 'PENDING',
-              progress: 0,
-              estimatedTime: '2 minutes',
-              relatedEntity: {
-                type: 'Leave Request',
-                name: 'John Doe - Annual Leave'
-              }
-            }
-          ]
-          setPendingTasks(mockTasks)
-          setTotalTasks(mockTasks.length)
-          setOverdueTasks(mockTasks.filter(t => t.status === 'OVERDUE').length)
+          console.error('Failed to fetch pending tasks:', response.status)
+          setPendingTasks([])
+          setTotalTasks(0)
+          setOverdueTasks(0)
         }
       } catch (error) {
         console.error('Failed to fetch pending tasks:', error)

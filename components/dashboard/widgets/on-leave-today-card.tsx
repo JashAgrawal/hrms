@@ -60,35 +60,9 @@ export function OnLeaveTodayCard() {
           setEmployeesOnLeave(onLeaveToday.slice(0, 8)) // Show max 8 employees
           setTotalCount(onLeaveToday.length)
         } else {
-          // Mock data if API not available
-          const mockData: EmployeeOnLeave[] = [
-            {
-              id: '1',
-              firstName: 'John',
-              lastName: 'Doe',
-              email: 'john.doe@company.com',
-              department: 'Engineering',
-              position: 'Senior Developer',
-              leaveType: 'Annual Leave',
-              startDate: new Date().toISOString(),
-              endDate: new Date().toISOString(),
-              isHalfDay: false
-            },
-            {
-              id: '2',
-              firstName: 'Jane',
-              lastName: 'Smith',
-              email: 'jane.smith@company.com',
-              department: 'Marketing',
-              position: 'Marketing Manager',
-              leaveType: 'Sick Leave',
-              startDate: new Date().toISOString(),
-              endDate: new Date().toISOString(),
-              isHalfDay: true
-            }
-          ]
-          setEmployeesOnLeave(mockData)
-          setTotalCount(mockData.length)
+          console.error('Failed to fetch employees on leave:', response.status)
+          setEmployeesOnLeave([])
+          setTotalCount(0)
         }
       } catch (error) {
         console.error('Failed to fetch employees on leave:', error)

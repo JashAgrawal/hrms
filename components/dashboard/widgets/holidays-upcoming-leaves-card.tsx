@@ -30,49 +30,18 @@ export function HolidaysUpcomingLeavesCard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch holidays - in real app, this would come from API
-        const mockHolidays: Holiday[] = [
-          {
-            id: '1',
-            name: 'New Year\'s Day',
-            date: '2025-01-01',
-            type: 'PUBLIC'
-          },
-          {
-            id: '2',
-            name: 'Republic Day',
-            date: '2025-01-26',
-            type: 'PUBLIC'
-          },
-          {
-            id: '3',
-            name: 'Holi',
-            date: '2025-03-14',
-            type: 'PUBLIC'
-          },
-          {
-            id: '4',
-            name: 'Good Friday',
-            date: '2025-04-18',
-            type: 'OPTIONAL'
-          },
-          {
-            id: '5',
-            name: 'Independence Day',
-            date: '2025-08-15',
-            type: 'PUBLIC'
-          }
-        ]
+        // Fetch upcoming holidays
+        const holidayResponse = await fetch('/api/holidays?upcoming=true&limit=5')
+        let holidays: Holiday[] = []
 
-        // Filter upcoming holidays (next 90 days)
-        const now = new Date()
-        const next90Days = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
-        const upcomingHolidays = mockHolidays.filter(holiday => {
-          const holidayDate = parseISO(holiday.date)
-          return holidayDate >= now && holidayDate <= next90Days
-        }).slice(0, 3)
+        if (holidayResponse.ok) {
+          const holidayData = await holidayResponse.json()
+          holidays = holidayData.holidays || []
+        } else {
+          console.error('Failed to fetch holidays:', holidayResponse.status)
+        }
 
-        setHolidays(upcomingHolidays)
+        setHolidays(holidays)
 
         // Fetch upcoming leaves
         const response = await fetch('/api/leave/requests?status=APPROVED&upcoming=true&limit=5')

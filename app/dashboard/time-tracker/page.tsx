@@ -45,48 +45,43 @@ export default function TimeTrackerDashboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Mock data - replace with actual API calls
-    const mockStats: DashboardStats = {
-      totalHoursThisWeek: 38.5,
-      totalHoursThisMonth: 152.25,
-      activeProjects: 5,
-      pendingTimesheets: 2,
-      approvedTimesheets: 8,
-      utilizationRate: 85
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true)
+
+        // Fetch timesheet dashboard statistics
+        const statsResponse = await fetch('/api/dashboard/timesheet/stats')
+        if (statsResponse.ok) {
+          const statsData = await statsResponse.json()
+          setStats(statsData)
+        } else {
+          console.error('Failed to fetch timesheet dashboard stats')
+        }
+
+        // Fetch recent timesheet activities
+        const activitiesResponse = await fetch('/api/timesheets?limit=5&orderBy=updatedAt')
+        if (activitiesResponse.ok) {
+          const activitiesData = await activitiesResponse.json()
+          const activities = (activitiesData.timesheets || []).map((timesheet: any) => ({
+            id: timesheet.id,
+            type: 'timesheet',
+            title: `${timesheet.status === 'SUBMITTED' ? 'Submitted' : timesheet.status === 'APPROVED' ? 'Approved' : 'Draft'} Timesheet`,
+            description: `Week of ${new Date(timesheet.startDate).toLocaleDateString()} - ${new Date(timesheet.endDate).toLocaleDateString()} • ${timesheet.totalHours} hours`,
+            date: timesheet.updatedAt,
+            status: timesheet.status
+          }))
+          setRecentActivity(activities)
+        } else {
+          console.error('Failed to fetch timesheet activities')
+        }
+      } catch (error) {
+        console.error('Error fetching timesheet dashboard data:', error)
+      } finally {
+        setLoading(false)
+      }
     }
 
-    const mockActivity: RecentActivity[] = [
-      {
-        id: '1',
-        type: 'timesheet',
-        title: 'Weekly Timesheet Submitted',
-        description: 'Week of Dec 4-8, 2023 • 40 hours',
-        date: '2023-12-08',
-        status: 'SUBMITTED'
-      },
-      {
-        id: '2',
-        type: 'project',
-        title: 'New Project Assignment',
-        description: 'Mobile App Development • Client: TechCorp',
-        date: '2023-12-07',
-        status: 'ACTIVE'
-      },
-      {
-        id: '3',
-        type: 'timesheet',
-        title: 'Timesheet Approved',
-        description: 'Week of Nov 27 - Dec 1, 2023 • 42 hours',
-        date: '2023-12-06',
-        status: 'APPROVED'
-      }
-    ]
-
-    setTimeout(() => {
-      setStats(mockStats)
-      setRecentActivity(mockActivity)
-      setLoading(false)
-    }, 1000)
+    fetchDashboardData()
   }, [])
 
   if (loading) {

@@ -15,17 +15,32 @@ const securitySettingsSchema = z.object({
   expiryEnforcement: z.boolean()
 })
 
-// Mock security settings storage (in a real app, this would be in the database)
-let securitySettings = {
-  encryptionEnabled: true,
-  watermarkEnabled: false,
-  accessLoggingEnabled: true,
-  downloadRestrictions: false,
-  ipWhitelist: [] as string[],
-  maxFileSize: 10485760, // 10MB
-  allowedFileTypes: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'],
-  passwordProtection: false,
-  expiryEnforcement: true
+// Helper function to get or create default security settings
+async function getSecuritySettings() {
+  let settings = await prisma.securitySettings.findFirst()
+
+  if (!settings) {
+    // Create default settings if none exist
+    settings = await prisma.securitySettings.create({
+      data: {
+        encryptionEnabled: true,
+        watermarkEnabled: false,
+        accessLoggingEnabled: true,
+        downloadRestrictions: false,
+        ipWhitelist: [],
+        maxFileSize: 10485760, // 10MB
+        allowedFileTypes: ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png'],
+        passwordProtection: false,
+        expiryEnforcement: true
+      }
+    })
+  }
+
+  return {
+    ...settings,
+    ipWhitelist: Array.isArray(settings.ipWhitelist) ? settings.ipWhitelist : [],
+    allowedFileTypes: Array.isArray(settings.allowedFileTypes) ? settings.allowedFileTypes : []
+  }
 }
 
 export async function GET(request: NextRequest) {
@@ -44,7 +59,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    return NextResponse.json({ settings: securitySettings })
+    const settings = await getSecuritySettings()
+    return NextResponse.json({ settings })
   } catch (error) {
     console.error('Error fetching security settings:', error)
     return NextResponse.json(
@@ -73,11 +89,35 @@ export async function PUT(request: NextRequest) {
     const body = await request.json()
     const validatedData = securitySettingsSchema.parse(body)
 
-    // Store old settings for audit log
-    const oldSettings = { ...securitySettings }
+    // Get current settings for audit log
+    const oldSettings = await getSecuritySettings()
 
-    // Update settings
-    securitySettings = { ...validatedData }
+    // Update or create settings
+    const updatedSettings = await prisma.securitySettings.upsert({
+      where: { id: oldSettings.id || 'default' },
+      update: {
+        encryptionEnabled: validatedData.encryptionEnabled,
+        watermarkEnabled: validatedData.watermarkEnabled,
+        accessLoggingEnabled: validatedData.accessLoggingEnabled,
+        downloadRestrictions: validatedData.downloadRestrictions,
+        ipWhitelist: validatedData.ipWhitelist,
+        maxFileSize: validatedData.maxFileSize,
+        allowedFileTypes: validatedData.allowedFileTypes,
+        passwordProtection: validatedData.passwordProtection,
+        expiryEnforcement: validatedData.expiryEnforcement
+      },
+      create: {
+        encryptionEnabled: validatedData.encryptionEnabled,
+        watermarkEnabled: validatedData.watermarkEnabled,
+        accessLoggingEnabled: validatedData.accessLoggingEnabled,
+        downloadRestrictions: validatedData.downloadRestrictions,
+        ipWhitelist: validatedData.ipWhitelist,
+        maxFileSize: validatedData.maxFileSize,
+        allowedFileTypes: validatedData.allowedFileTypes,
+        passwordProtection: validatedData.passwordProtection,
+        expiryEnforcement: validatedData.expiryEnforcement
+      }
+    })
 
     // Log the action
     await prisma.auditLog.create({
@@ -86,11 +126,17 @@ export async function PUT(request: NextRequest) {
         action: 'UPDATE',
         resource: 'DOCUMENT_SECURITY_SETTINGS',
         oldValues: oldSettings,
-        newValues: securitySettings
+        newValues: updatedSettings
       }
     })
 
-    return NextResponse.json({ settings: securitySettings })
+    const settings = {
+      ...updatedSettings,
+      ipWhitelist: Array.isArray(updatedSettings.ipWhitelist) ? updatedSettings.ipWhitelist : [],
+      allowedFileTypes: Array.isArray(updatedSettings.allowedFileTypes) ? updatedSettings.allowedFileTypes : []
+    }
+
+    return NextResponse.json({ settings })
   } catch (error) {
     console.error('Error updating security settings:', error)
     if (error instanceof z.ZodError) {

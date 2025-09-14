@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
     const sevenDaysAgo = subDays(new Date(), 7)
 
     // Base query conditions based on user role
-    let whereCondition: any = {
+    const whereCondition: any = {
       updatedAt: { gte: sevenDaysAgo }
     }
     
