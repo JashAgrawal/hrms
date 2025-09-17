@@ -26,20 +26,21 @@ interface SiteVisit {
   distanceFromSite?: number
   isValidLocation: boolean
   duration?: number
+  locationName?: string
   employee: {
     id: string
     firstName: string
     lastName: string
     employeeCode: string
   }
-  site: {
+  site?: {
     id: string
     name: string
     code: string
     address: string
     city: string
     siteType: string
-  }
+  } | null
 }
 
 const statusColors = {
@@ -55,6 +56,7 @@ const siteTypeColors = {
   PARTNER: 'bg-purple-100 text-purple-800',
   WAREHOUSE: 'bg-orange-100 text-orange-800',
   OFFICE: 'bg-gray-100 text-gray-800',
+  LOCATION_BASED: 'bg-indigo-100 text-indigo-800',
   OTHER: 'bg-yellow-100 text-yellow-800',
 }
 
@@ -217,9 +219,10 @@ export function SiteVisitsDashboard() {
                 visit.employee.firstName.toLowerCase().includes(searchLower) ||
                 visit.employee.lastName.toLowerCase().includes(searchLower) ||
                 visit.employee.employeeCode.toLowerCase().includes(searchLower) ||
-                visit.site.name.toLowerCase().includes(searchLower) ||
-                visit.site.code.toLowerCase().includes(searchLower) ||
-                visit.site.city.toLowerCase().includes(searchLower)
+                (visit.site?.name?.toLowerCase().includes(searchLower)) ||
+                (visit.site?.code?.toLowerCase().includes(searchLower)) ||
+                (visit.site?.city?.toLowerCase().includes(searchLower)) ||
+                (visit.locationName?.toLowerCase().includes(searchLower))
               )
             })
             .map((visit) => (
@@ -238,17 +241,25 @@ export function SiteVisitsDashboard() {
                           
                           <div className="flex items-center gap-2 mb-2">
                             <MapPin className="h-4 w-4 text-gray-500" />
-                            <span className="font-medium">{visit.site.name}</span>
+                            <span className="font-medium">
+                              {visit.site?.name || visit.locationName || 'Unknown Location'}
+                            </span>
                             <Badge
-                              className={siteTypeColors[visit.site.siteType as keyof typeof siteTypeColors]}
+                              className={siteTypeColors[(visit.site?.siteType || 'LOCATION_BASED') as keyof typeof siteTypeColors]}
                             >
-                              {visit.site.siteType}
+                              {visit.site?.siteType || 'LOCATION_BASED'}
                             </Badge>
                           </div>
 
-                          <p className="text-sm text-gray-600 mb-3">
-                            {visit.site.address}, {visit.site.city}
-                          </p>
+                          {visit.site ? (
+                            <p className="text-sm text-gray-600 mb-3">
+                              {visit.site.address}, {visit.site.city}
+                            </p>
+                          ) : (
+                            <p className="text-sm text-gray-600 mb-3">
+                              Custom location visit
+                            </p>
+                          )}
 
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 text-sm">
                             <div className="flex items-center gap-2">
@@ -279,7 +290,7 @@ export function SiteVisitsDashboard() {
                               </div>
                             )}
 
-                            {visit.distanceFromSite !== undefined && (
+                            {visit.distanceFromSite !== undefined && visit.site && (
                               <div className="flex items-center gap-2">
                                 {visit.isValidLocation ? (
                                   <CheckCircle className="h-4 w-4 text-green-500" />
@@ -290,6 +301,13 @@ export function SiteVisitsDashboard() {
                                   {Math.round(visit.distanceFromSite)}m
                                   {!visit.isValidLocation && ' (Outside radius)'}
                                 </span>
+                              </div>
+                            )}
+
+                            {!visit.site && (
+                              <div className="flex items-center gap-2">
+                                <MapPin className="h-4 w-4 text-indigo-500" />
+                                <span className="text-indigo-600">Location-based visit</span>
                               </div>
                             )}
                           </div>

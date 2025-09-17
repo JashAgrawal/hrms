@@ -65,9 +65,18 @@ export function MobileAttendanceCalendar() {
       }
     } catch (error) {
       console.error('Error fetching calendar:', error)
-      // Fallback to mock data for development
-      const mockData = generateMockCalendarData(currentDate)
-      setCalendarData(mockData)
+      // Set empty calendar data on error
+      setCalendarData({
+        days: [],
+        pendingRequests: [],
+        summary: {
+          totalDays: 0,
+          presentDays: 0,
+          absentDays: 0,
+          leaveDays: 0,
+          weekOffs: 0,
+        }
+      })
     } finally {
       setLoading(false)
     }
@@ -313,54 +322,3 @@ export function MobileAttendanceCalendar() {
   )
 }
 
-// Mock data generator - replace with actual API integration
-function generateMockCalendarData(currentDate: Date): CalendarData {
-  const startDate = startOfWeek(startOfMonth(currentDate))
-  const endDate = endOfWeek(endOfMonth(currentDate))
-  const days = eachDayOfInterval({ start: startDate, end: endDate })
-
-  const calendarDays: AttendanceDay[] = days.map((date) => {
-    const dayOfWeek = getDay(date)
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6
-    const isCurrentMonth = isSameMonth(date, currentDate)
-    const dayOfMonth = parseInt(format(date, 'd'))
-    
-    let status: AttendanceDay['status'] = null
-    
-    if (isWeekend) {
-      status = 'WO'
-    } else if (isCurrentMonth) {
-      // Mock attendance pattern
-      if (dayOfMonth === 25 || dayOfMonth === 26) {
-        status = 'AB'
-      } else if (dayOfMonth === 27 || dayOfMonth === 28) {
-        status = 'AB'
-      } else if (dayOfMonth <= 24) {
-        status = 'PP'
-      }
-    }
-
-    return {
-      date: date.toISOString(),
-      dayOfWeek,
-      isWeekend,
-      status,
-      isToday: isToday(date),
-      isCurrentMonth,
-    }
-  })
-
-  const mockPendingRequests: PendingRequest[] = []
-
-  return {
-    days: calendarDays,
-    pendingRequests: mockPendingRequests,
-    summary: {
-      totalDays: 30,
-      presentDays: 24,
-      absentDays: 4,
-      leaveDays: 0,
-      weekOffs: 8,
-    }
-  }
-}

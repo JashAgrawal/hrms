@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import Image from 'next/image'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -306,7 +307,7 @@ export function PayslipGenerator({
           <CardHeader className="text-center border-b">
             <div className="flex items-center justify-center space-x-4 mb-4">
               {company.logo && (
-                <img src={company.logo} alt="Company Logo" className="h-12 w-12" />
+                <Image src={company.logo} alt="Company Logo" width={48} height={48} className="h-12 w-12" />
               )}
               <div>
                 <CardTitle className="text-2xl font-bold">{company.name}</CardTitle>

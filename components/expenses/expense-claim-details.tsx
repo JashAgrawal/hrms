@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -612,9 +613,11 @@ export function ExpenseClaimDetails({
               <DialogTitle>Attachment Viewer</DialogTitle>
             </DialogHeader>
             <div className="flex justify-center">
-              <img
+              <Image
                 src={selectedAttachment}
                 alt="Attachment"
+                width={800}
+                height={600}
                 className="max-w-full max-h-[70vh] object-contain"
               />
             </div>

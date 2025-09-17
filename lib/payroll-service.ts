@@ -178,7 +178,21 @@ export class PayrollCalculationEngine {
     let halfDays = 0
     let overtimeHours = 0
 
-    attendanceRecords.forEach(record => {
+    // Validate input data
+    if (!Array.isArray(attendanceRecords)) {
+      throw new Error('Invalid attendance data: expected array')
+    }
+
+    if (workingDays <= 0 || workingDays > 31) {
+      throw new Error('Invalid working days: must be between 1 and 31')
+    }
+
+    attendanceRecords.forEach((record, index) => {
+      if (!record || typeof record !== 'object') {
+        console.warn(`Invalid attendance record at index ${index}:`, record)
+        return
+      }
+
       switch (record.status) {
         case AttendanceStatus.PRESENT:
           presentDays += 1
@@ -194,25 +208,43 @@ export class PayrollCalculationEngine {
           // Leave days are considered as present for payroll
           presentDays += 1
           break
+        case AttendanceStatus.WORK_FROM_HOME:
+          presentDays += 1
+          break
+        default:
+          // Default to absent for unknown status
+          console.warn(`Unknown attendance status: ${record.status}`)
+          absentDays += 1
       }
 
-      // Add overtime hours
+      // Add overtime hours with validation
       if (record.overtime && record.overtime > 0) {
-        overtimeHours += parseFloat(record.overtime.toString())
+        const overtime = parseFloat(record.overtime.toString())
+        // Validate overtime hours (max 12 hours per day)
+        if (!isNaN(overtime) && overtime > 0 && overtime <= 12) {
+          overtimeHours += overtime
+        }
       }
     })
 
-    // Calculate LOP (Loss of Pay) days
-    const totalAccountedDays = presentDays + absentDays
+    // Ensure present days don't exceed working days
+    presentDays = Math.min(presentDays, workingDays)
+
+    // Calculate LOP (Loss of Pay) days - fixed calculation
     const lopDays = Math.max(0, workingDays - presentDays)
 
+    // Validate calculated values
+    if (presentDays < 0 || absentDays < 0 || lopDays < 0 || overtimeHours < 0) {
+      throw new Error('Invalid attendance calculation results')
+    }
+
     return {
-      presentDays,
-      absentDays,
-      halfDays,
-      lopDays,
+      presentDays: Math.round(presentDays * 100) / 100, // Round to 2 decimal places
+      absentDays: Math.round(absentDays * 100) / 100,
+      halfDays: Math.round(halfDays * 100) / 100,
+      lopDays: Math.round(lopDays * 100) / 100,
       lopAmount: 0, // Will be calculated based on daily rate
-      overtimeHours,
+      overtimeHours: Math.round(overtimeHours * 100) / 100,
       overtimeAmount: 0, // Will be calculated based on hourly rate
     }
   }
@@ -322,10 +354,22 @@ export class PayrollCalculationEngine {
       attendanceMetrics.lopAmount = dailyRate * attendanceMetrics.lopDays
     }
 
-    // Calculate overtime amount
+    // Calculate overtime amount with configurable rates
     if (attendanceMetrics.overtimeHours > 0) {
-      const hourlyRate = basicSalary / (workingDays * 8) // Assuming 8 hours per day
-      attendanceMetrics.overtimeAmount = hourlyRate * 1.5 * attendanceMetrics.overtimeHours // 1.5x rate for overtime
+      // Get standard working hours per day (default 8, but should be configurable)
+      const standardHoursPerDay = 8 // TODO: Make this configurable per company/employee
+      const hourlyRate = basicSalary / (workingDays * standardHoursPerDay)
+
+      // Overtime multiplier (1.5x is standard, but should be configurable)
+      const overtimeMultiplier = 1.5 // TODO: Make this configurable per company policy
+
+      // Validate hourly rate calculation
+      if (hourlyRate <= 0 || !isFinite(hourlyRate)) {
+        console.warn('Invalid hourly rate calculation:', { basicSalary, workingDays, standardHoursPerDay })
+        attendanceMetrics.overtimeAmount = 0
+      } else {
+        attendanceMetrics.overtimeAmount = Math.round(hourlyRate * overtimeMultiplier * attendanceMetrics.overtimeHours * 100) / 100
+      }
     }
 
     // Calculate statutory deductions
@@ -381,7 +425,7 @@ export class PayrollCalculationEngine {
   }
 
   /**
-   * Calculate statutory deductions (PF, ESI, TDS, PT)
+   * Calculate statutory deductions (PF, ESI, TDS, PT) with configurable rates
    */
   private async calculateStatutoryDeductions(
     components: ComponentCalculation[],
@@ -392,11 +436,20 @@ export class PayrollCalculationEngine {
       .filter(c => c.type === PayComponentType.EARNING)
       .reduce((sum, c) => sum + c.calculatedValue, 0)
 
-    // Update PF calculation (12% of basic salary, capped at ₹1,800)
+    // Validate inputs
+    if (basicSalary <= 0 || grossSalary <= 0) {
+      console.warn('Invalid salary values for statutory deductions:', { basicSalary, grossSalary })
+      return
+    }
+
+    // PF calculation (configurable rate and ceiling)
     const pfComponent = components.find(c => c.componentCode === 'PF')
     if (pfComponent) {
-      const pfAmount = Math.min(basicSalary * 0.12, 1800)
-      pfComponent.calculatedValue = pfAmount
+      // TODO: Make these configurable from database/settings
+      const pfRate = 0.12 // 12%
+      const pfCeiling = 1800 // ₹1,800 per month
+      const pfAmount = Math.min(basicSalary * pfRate, pfCeiling)
+      pfComponent.calculatedValue = Math.round(pfAmount * 100) / 100
     }
 
     // Update ESI calculation (0.75% of gross salary, applicable if gross <= ₹25,000)

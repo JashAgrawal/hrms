@@ -24,6 +24,7 @@ import {
   AnnouncementsCard,
   PendingTasksCard
 } from "./widgets"
+import { FieldEmployeeWidget } from "./widgets/field-employee-widget"
 import { useEffect, useState } from "react"
 
 interface DashboardStats {
@@ -218,6 +219,11 @@ export function EmployeeDashboard() {
         {/* Check In/Out - Important daily actions */}
         <div className="col-span-1 md:col-span-3 lg:col-span-4">
           <CheckInOutCard />
+        </div>
+
+        {/* Field Employee Widget - Site check-in for field employees */}
+        <div className="col-span-1 md:col-span-3 lg:col-span-4">
+          <FieldEmployeeWidget />
         </div>
 
         {/* Your Info - Compact profile information */}

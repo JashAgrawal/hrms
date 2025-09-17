@@ -9,11 +9,13 @@ import { format } from "date-fns"
 
 interface AttendanceStatus {
   isCheckedIn: boolean
+  hasCheckedIn?: boolean
+  hasCheckedOut?: boolean
   checkInTime?: string
   checkOutTime?: string
   workingHours: string
   breakTime: string
-  status: 'PRESENT' | 'ABSENT' | 'LATE' | 'ON_BREAK'
+  status: 'PRESENT' | 'ABSENT' | 'LATE' | 'ON_BREAK' | 'NOT_MARKED'
   location?: {
     name: string
     isValid: boolean
@@ -38,7 +40,7 @@ export function CheckInOutCard() {
     }, 60000)
 
     return () => clearInterval(timer)
-  }, [])
+  }, []) // This is intentionally empty as we want this to run once on mount
 
   useEffect(() => {
     const fetchAttendanceStatus = async () => {
@@ -46,7 +48,21 @@ export function CheckInOutCard() {
         const response = await fetch('/api/attendance/status')
         if (response.ok) {
           const data = await response.json()
-          setAttendanceStatus(data)
+          // Map API response to component state
+          setAttendanceStatus({
+            isCheckedIn: data.hasCheckedIn && !data.hasCheckedOut,
+            hasCheckedIn: data.hasCheckedIn,
+            hasCheckedOut: data.hasCheckedOut,
+            checkInTime: data.checkInTime,
+            checkOutTime: data.checkOutTime,
+            workingHours: data.currentWorkHours ? `${Math.floor(data.currentWorkHours)}h ${Math.round((data.currentWorkHours % 1) * 60)}m` : '0h 0m',
+            breakTime: '0m', // TODO: Implement break time tracking
+            status: data.status === 'NOT_MARKED' ? 'ABSENT' : data.status,
+            location: data.location ? {
+              name: data.location.address || 'Unknown Location',
+              isValid: true
+            } : undefined
+          })
         }
       } catch (error) {
         console.error('Failed to fetch attendance status:', error)
@@ -170,6 +186,7 @@ export function CheckInOutCard() {
         return <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">Late</Badge>
       case 'ON_BREAK':
         return <Badge variant="outline" className="bg-blue-100 text-blue-800">On Break</Badge>
+      case 'NOT_MARKED':
       case 'ABSENT':
       default:
         return <Badge variant="secondary" className="bg-gray-100 text-gray-800">Not Checked In</Badge>
@@ -200,26 +217,26 @@ export function CheckInOutCard() {
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Clock className="h-4 w-4" />
+    <Card className="w-full">
+      <CardHeader className="pb-4">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <Clock className="h-5 w-5 text-primary" />
           Check In/Out
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Current Status */}
         <div className="flex items-center justify-between">
-          <span className="text-sm text-muted-foreground">Status</span>
+          <span className="text-sm font-medium text-muted-foreground">Status</span>
           {getStatusBadge(attendanceStatus.status)}
         </div>
 
         {/* Current Time */}
-        <div className="text-center py-2">
-          <p className="text-2xl font-bold">
+        <div className="text-center py-3 bg-muted/30 rounded-lg">
+          <p className="text-3xl md:text-2xl font-bold text-foreground" aria-label={`Current time is ${format(currentTime, 'HH:mm')}`}>
             {format(currentTime, 'HH:mm')}
           </p>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground mt-1">
             {format(currentTime, 'EEEE, MMM dd')}
           </p>
         </div>
@@ -278,38 +295,41 @@ export function CheckInOutCard() {
         )}
 
         {/* Action Buttons */}
-        <div className="space-y-2">
+        <div className="space-y-3">
           {!attendanceStatus.isCheckedIn ? (
-            <Button 
-              onClick={handleCheckIn} 
+            <Button
+              onClick={handleCheckIn}
               disabled={actionLoading}
-              className="w-full"
-              size="sm"
+              className="w-full h-12 text-base font-medium"
+              size="lg"
+              aria-label="Check in to work"
             >
               <LogIn className="h-4 w-4 mr-2" />
               {actionLoading ? 'Checking In...' : 'Check In'}
             </Button>
           ) : (
-            <div className="space-y-2">
-              <Button 
-                onClick={handleCheckOut} 
+            <div className="space-y-3">
+              <Button
+                onClick={handleCheckOut}
                 disabled={actionLoading}
                 variant="outline"
-                className="w-full"
-                size="sm"
+                className="w-full h-12 text-base font-medium"
+                size="lg"
+                aria-label="Check out from work"
               >
                 <LogOut className="h-4 w-4 mr-2" />
                 {actionLoading ? 'Checking Out...' : 'Check Out'}
               </Button>
-              <Button 
-                onClick={handleBreak} 
+              <Button
+                onClick={handleBreak}
                 disabled={actionLoading}
                 variant="secondary"
-                className="w-full"
-                size="sm"
+                className="w-full h-10 text-sm font-medium"
+                size="default"
+                aria-label={attendanceStatus.status === 'ON_BREAK' ? 'Resume work from break' : 'Take a break'}
               >
                 <Coffee className="h-4 w-4 mr-2" />
-                {attendanceStatus.status === 'ON_BREAK' 
+                {attendanceStatus.status === 'ON_BREAK'
                   ? (actionLoading ? 'Resuming...' : 'Resume Work')
                   : (actionLoading ? 'Taking Break...' : 'Take Break')
                 }

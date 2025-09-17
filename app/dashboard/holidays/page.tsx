@@ -23,6 +23,7 @@ import { HolidayList } from '@/components/holidays/holiday-list'
 import { CreateHolidayDialog } from '@/components/holidays/create-holiday-dialog'
 import { OptionalLeavePolicyManager } from '@/components/holidays/optional-leave-policy-manager'
 import { HolidayStats } from '@/components/holidays/holiday-stats'
+import { QuickAddHolidays } from '@/components/holidays/quick-add-holidays'
 
 interface Holiday {
   id: string
@@ -210,7 +211,7 @@ export default function HolidaysPage() {
 
       {/* Main Content */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="calendar">
             <Calendar className="h-4 w-4 mr-2" />
             Calendar
@@ -218,6 +219,10 @@ export default function HolidaysPage() {
           <TabsTrigger value="holidays">
             <Settings className="h-4 w-4 mr-2" />
             Holidays
+          </TabsTrigger>
+          <TabsTrigger value="quick-add">
+            <Plus className="h-4 w-4 mr-2" />
+            Quick Add
           </TabsTrigger>
           <TabsTrigger value="optional-policies">
             <Users className="h-4 w-4 mr-2" />
@@ -247,6 +252,21 @@ export default function HolidaysPage() {
             onHolidayUpdated={fetchHolidays}
             canEdit={isHROrAdmin}
           />
+        </TabsContent>
+
+        <TabsContent value="quick-add" className="space-y-6">
+          {isHROrAdmin ? (
+            <QuickAddHolidays 
+              year={selectedYear}
+              onHolidaysAdded={fetchHolidays}
+            />
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground">
+                You don't have permission to add holidays.
+              </p>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="optional-policies" className="space-y-6">

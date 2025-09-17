@@ -34,9 +34,13 @@ export default function ProjectsPage() {
     clientName: '',
     startDate: '',
     endDate: '',
-    status: 'ACTIVE' as const
+    status: 'ACTIVE' as 'ACTIVE' | 'COMPLETED' | 'ON_HOLD' | 'CANCELLED'
   })
   const [formLoading, setFormLoading] = useState(false)
+  const [editingProject, setEditingProject] = useState<Project | null>(null)
+  const [showEditDialog, setShowEditDialog] = useState(false)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
+  const [deletingProject, setDeletingProject] = useState<Project | null>(null)
 
   // Fetch projects
   const fetchProjects = async () => {
@@ -103,6 +107,97 @@ export default function ProjectsPage() {
     } catch (error: any) {
       console.error('Error creating project:', error)
       toast.error(error.message || 'Failed to create project')
+    } finally {
+      setFormLoading(false)
+    }
+  }
+
+  // Edit project
+  const handleEditProject = (project: Project) => {
+    setEditingProject(project)
+    setFormData({
+      name: project.name,
+      code: project.code,
+      description: project.description || '',
+      clientName: project.clientName || '',
+      startDate: project.startDate,
+      endDate: project.endDate || '',
+      status: project.status
+    })
+    setShowEditDialog(true)
+  }
+
+  const handleUpdateProject = async (e: React.FormEvent) => {
+    e.preventDefault()
+    
+    if (!editingProject || !formData.name.trim() || !formData.code.trim() || !formData.startDate) {
+      toast.error('Please fill in all required fields')
+      return
+    }
+
+    try {
+      setFormLoading(true)
+      
+      const res = await fetch(`/api/projects/${editingProject.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(formData)
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || 'Failed to update project')
+      }
+
+      toast.success('Project updated successfully')
+      setShowEditDialog(false)
+      setEditingProject(null)
+      setFormData({
+        name: '',
+        code: '',
+        description: '',
+        clientName: '',
+        startDate: '',
+        endDate: '',
+        status: 'ACTIVE'
+      })
+      fetchProjects()
+    } catch (error: any) {
+      console.error('Error updating project:', error)
+      toast.error(error.message || 'Failed to update project')
+    } finally {
+      setFormLoading(false)
+    }
+  }
+
+  // Delete project
+  const handleDeleteProject = (project: Project) => {
+    setDeletingProject(project)
+    setShowDeleteDialog(true)
+  }
+
+  const confirmDeleteProject = async () => {
+    if (!deletingProject) return
+
+    try {
+      setFormLoading(true)
+      
+      const res = await fetch(`/api/projects/${deletingProject.id}`, {
+        method: 'DELETE'
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        throw new Error(error.error || 'Failed to delete project')
+      }
+
+      toast.success('Project deleted successfully')
+      setShowDeleteDialog(false)
+      setDeletingProject(null)
+      fetchProjects()
+    } catch (error: any) {
+      console.error('Error deleting project:', error)
+      toast.error(error.message || 'Failed to delete project')
     } finally {
       setFormLoading(false)
     }
@@ -270,6 +365,154 @@ export default function ProjectsPage() {
             </form>
           </DialogContent>
         </Dialog>
+
+        {/* Edit Project Dialog */}
+        <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+          <DialogContent className="sm:max-w-[500px]">
+            <form onSubmit={handleUpdateProject}>
+              <DialogHeader>
+                <DialogTitle>Edit Project</DialogTitle>
+                <DialogDescription>
+                  Update project information and settings.
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-name">Project Name *</Label>
+                    <Input
+                      id="edit-name"
+                      value={formData.name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                      placeholder="Enter project name"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-code">Project Code *</Label>
+                    <Input
+                      id="edit-code"
+                      value={formData.code}
+                      onChange={(e) => setFormData(prev => ({ ...prev, code: e.target.value.toUpperCase() }))}
+                      placeholder="e.g., PROJ001"
+                      required
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="edit-clientName">Client Name</Label>
+                  <Input
+                    id="edit-clientName"
+                    value={formData.clientName}
+                    onChange={(e) => setFormData(prev => ({ ...prev, clientName: e.target.value }))}
+                    placeholder="Enter client name"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="edit-description">Description</Label>
+                  <Textarea
+                    id="edit-description"
+                    value={formData.description}
+                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                    placeholder="Project description..."
+                    rows={3}
+                  />
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-startDate">Start Date *</Label>
+                    <Input
+                      id="edit-startDate"
+                      type="date"
+                      value={formData.startDate}
+                      onChange={(e) => setFormData(prev => ({ ...prev, startDate: e.target.value }))}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-endDate">End Date</Label>
+                    <Input
+                      id="edit-endDate"
+                      type="date"
+                      value={formData.endDate}
+                      onChange={(e) => setFormData(prev => ({ ...prev, endDate: e.target.value }))}
+                      min={formData.startDate}
+                    />
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="edit-status">Status</Label>
+                  <Select
+                    value={formData.status}
+                    onValueChange={(value: any) => setFormData(prev => ({ ...prev, status: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ACTIVE">Active</SelectItem>
+                      <SelectItem value="ON_HOLD">On Hold</SelectItem>
+                      <SelectItem value="COMPLETED">Completed</SelectItem>
+                      <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowEditDialog(false)}
+                  disabled={formLoading}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={formLoading}>
+                  {formLoading ? 'Updating...' : 'Update Project'}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete Project</DialogTitle>
+              <DialogDescription>
+                Are you sure you want to delete "{deletingProject?.name}"? This action cannot be undone.
+                {deletingProject?._count?.timeEntries && deletingProject._count.timeEntries > 0 && (
+                  <div className="mt-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-yellow-800">
+                    Warning: This project has {deletingProject._count.timeEntries} time entries associated with it.
+                  </div>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteDialog(false)}
+                disabled={formLoading}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={confirmDeleteProject}
+                disabled={formLoading}
+              >
+                {formLoading ? 'Deleting...' : 'Delete Project'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Filters */}
@@ -388,10 +631,19 @@ export default function ProjectsPage() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-2">
-                          <Button variant="ghost" size="sm">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleEditProject(project)}
+                          >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="sm" className="text-destructive">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="text-destructive"
+                            onClick={() => handleDeleteProject(project)}
+                          >
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>

@@ -599,11 +599,16 @@ async function seedEmployees() {
   console.log(`📊 Total employees created: ${empCode - 7}`)
 }
 
-seedEmployees()
-  .catch((e) => {
-    console.error('❌ Employee seeding failed:', e)
-    process.exit(1)
-  })
-  .finally(async () => {
-    await prisma.$disconnect()
-  })
+export default seedEmployees
+
+// Only run directly if this file is executed directly
+if (require.main === module) {
+  seedEmployees()
+    .catch((e) => {
+      console.error('❌ Employee seeding failed:', e)
+      process.exit(1)
+    })
+    .finally(async () => {
+      await prisma.$disconnect()
+    })
+}

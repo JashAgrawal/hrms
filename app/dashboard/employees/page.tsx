@@ -7,36 +7,55 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Plus, Users, UserCheck, UserX, Clock } from 'lucide-react'
 import Link from 'next/link'
 import { auth } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
 import { redirect } from 'next/navigation'
 import { ExportAllButton } from '@/components/employees/export-all-button'
 
 async function getEmployeeStats() {
   try {
-    const response = await fetch(`${process.env.NEXTAUTH_URL}/api/employees/stats`, {
-      cache: 'no-store'
-    })
-    if (response.ok) {
-      return await response.json()
+    const [total, active, inactive, onLeave] = await Promise.all([
+      prisma.employee.count(),
+      prisma.employee.count({ where: { status: 'ACTIVE' } }),
+      prisma.employee.count({ where: { status: 'INACTIVE' } }),
+      prisma.employee.count({ where: { status: 'ON_LEAVE' } }),
+    ])
+
+    return {
+      total,
+      active,
+      inactive,
+      onLeave
     }
   } catch (error) {
     console.error('Error fetching employee stats:', error)
+    return { total: 0, active: 0, onLeave: 0, inactive: 0 }
   }
-  return { total: 0, active: 0, onLeave: 0, inactive: 0 }
 }
 
 async function getDepartments() {
   try {
-    const response = await fetch(`${process.env.NEXTAUTH_URL}/api/departments`, {
-      cache: 'no-store'
+    const departments = await prisma.department.findMany({
+      where: { isActive: true },
+      orderBy: { name: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        description: true,
+        _count: {
+          select: {
+            employees: {
+              where: { status: 'ACTIVE' }
+            }
+          }
+        }
+      }
     })
-    if (response.ok) {
-      const data = await response.json()
-      return Array.isArray(data.departments) ? data.departments : []
-    }
+    return departments
   } catch (error) {
     console.error('Error fetching departments:', error)
+    return []
   }
-  return []
 }
 
 export default async function EmployeesPage({

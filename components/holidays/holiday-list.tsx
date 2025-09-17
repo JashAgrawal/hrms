@@ -42,7 +42,7 @@ import {
   Calendar,
   Eye
 } from 'lucide-react'
-// import { EditHolidayDialog } from './edit-holiday-dialog'
+import { EditHolidayDialog } from './edit-holiday-dialog'
 
 interface Holiday {
   id: string
@@ -270,10 +270,13 @@ export function HolidayList({ holidays, onHolidayUpdated, canEdit }: HolidayList
         </CardContent>
       </Card>
 
-      {/* Edit Holiday Dialog - TODO: Implement EditHolidayDialog component */}
-      {editingHoliday && (
-        <div>Edit dialog placeholder for {editingHoliday.name}</div>
-      )}
+      {/* Edit Holiday Dialog */}
+      <EditHolidayDialog
+        holiday={editingHoliday}
+        open={!!editingHoliday}
+        onOpenChange={(open) => !open && setEditingHoliday(null)}
+        onHolidayUpdated={onHolidayUpdated}
+      />
 
       {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deletingHoliday} onOpenChange={() => setDeletingHoliday(null)}>

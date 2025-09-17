@@ -13,7 +13,7 @@ interface EmployeeInfo {
   lastName: string
   email: string
   employeeCode: string
-  department: string
+  department: { id: string; name: string } | string
   position: string
   joinDate: string
   leaveBalance: number
@@ -151,7 +151,9 @@ export function YourInfoCard() {
           <div className="flex items-center justify-between">
             <span className="text-xs text-muted-foreground">Department</span>
             <Badge variant="secondary" className="text-xs">
-              {employeeInfo?.department || 'Engineering'}
+              {typeof employeeInfo?.department === 'object' 
+                ? employeeInfo.department.name 
+                : employeeInfo?.department || 'Engineering'}
             </Badge>
           </div>
           <div className="flex items-center justify-between">

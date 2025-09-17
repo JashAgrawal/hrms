@@ -417,7 +417,8 @@ model EmployeeSite {
 model SiteVisit {
   id               String           @id @default(cuid())
   employeeId       String
-  siteId           String
+  siteId           String?          // Optional for location-based visits
+  locationName     String?          // For location-based visits without specific site
   date             DateTime         @db.Date
   checkInTime      DateTime
   checkOutTime     DateTime?
@@ -434,7 +435,7 @@ model SiteVisit {
   updatedAt        DateTime         @updatedAt
 
   employee Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  site     Site     @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  site     Site?    @relation(fields: [siteId], references: [id], onDelete: Cascade)
 
   @@index([employeeId, date])
   @@index([siteId, date])

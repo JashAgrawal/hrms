@@ -1,5 +1,27 @@
 import { prisma } from '@/lib/prisma'
 
+/**
+ * Get attendance cutoff configuration from environment variables
+ */
+function getAttendanceCutoffConfig() {
+  const cutoffHour = parseInt(process.env.ATTENDANCE_CUTOFF_HOUR || '18')
+  const cutoffMinute = parseInt(process.env.ATTENDANCE_CUTOFF_MINUTE || '0')
+
+  // Validate hour (0-23)
+  if (cutoffHour < 0 || cutoffHour > 23) {
+    console.warn(`Invalid ATTENDANCE_CUTOFF_HOUR: ${cutoffHour}. Using default 18.`)
+    return { hour: 18, minute: 0 }
+  }
+
+  // Validate minute (0-59)
+  if (cutoffMinute < 0 || cutoffMinute > 59) {
+    console.warn(`Invalid ATTENDANCE_CUTOFF_MINUTE: ${cutoffMinute}. Using default 0.`)
+    return { hour: cutoffHour, minute: 0 }
+  }
+
+  return { hour: cutoffHour, minute: cutoffMinute }
+}
+
 export interface AbsenceMarkingJobResult {
   success: boolean
   processed: number
@@ -20,8 +42,10 @@ export interface AbsenceMarkingJobResult {
 }
 
 /**
- * Automatically mark employees as absent if they haven't checked out by 12 PM (end of day)
- * This function should be called daily after 12 PM
+ * Automatically mark employees as absent if they haven't checked out by the configured cutoff time
+ * This function should be called daily after the cutoff time
+ * Cutoff time can be configured via ATTENDANCE_CUTOFF_HOUR and ATTENDANCE_CUTOFF_MINUTE environment variables
+ * Defaults to 6:00 PM (18:00) if not configured
  */
 export async function markAbsentForMissingCheckout(
   targetDate?: Date
@@ -44,9 +68,10 @@ export async function markAbsentForMissingCheckout(
     const today = targetDate || new Date()
     const dateOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate())
     
-    // Set cutoff time to 12:00 PM (noon)
+    // Set cutoff time - configurable via environment variables
+    const cutoffConfig = getAttendanceCutoffConfig()
     const cutoffTime = new Date(dateOnly)
-    cutoffTime.setHours(12, 0, 0, 0)
+    cutoffTime.setHours(cutoffConfig.hour, cutoffConfig.minute, 0, 0)
     
     const currentTime = new Date()
     
@@ -59,7 +84,7 @@ export async function markAbsentForMissingCheckout(
 
     console.log(`Starting absence marking for ${dateOnly.toDateString()} at ${currentTime.toLocaleTimeString()}`)
 
-    // Find attendance records where employees checked in but haven't checked out by 12 PM
+    // Find attendance records where employees checked in but haven't checked out by cutoff time
     const attendanceRecords = await prisma.attendanceRecord.findMany({
       where: {
         date: dateOnly,
@@ -104,27 +129,41 @@ export async function markAbsentForMissingCheckout(
           continue
         }
 
-        // Check if employee checked in before 12 PM (to avoid marking someone absent who checked in after 12 PM)
-        if (record.checkIn && record.checkIn > cutoffTime) {
-          console.log(`Skipping ${record.employee.employeeCode} - checked in after cutoff time`)
-          result.summary.skipped++
-          continue
-        }
-
+        // Don't mark as absent if employee checked in - they were present
+        // Instead, just auto-checkout with a note
         const previousStatus = record.status
         const employeeName = `${record.employee.firstName} ${record.employee.lastName}`
 
-        // Update attendance record to ABSENT
-        await prisma.attendanceRecord.update({
-          where: { id: record.id },
-          data: {
-            status: 'ABSENT',
-            notes: record.notes 
-              ? `${record.notes}\n[AUTO] Marked absent due to missing checkout by 12 PM on ${currentTime.toLocaleString()}`
-              : `[AUTO] Marked absent due to missing checkout by 12 PM on ${currentTime.toLocaleString()}`,
-            updatedAt: currentTime,
-          },
-        })
+        if (record.checkIn) {
+          // Employee checked in but forgot to check out - auto checkout
+          await prisma.attendanceRecord.update({
+            where: { id: record.id },
+            data: {
+              checkOut: cutoffTime, // Auto checkout at cutoff time
+              status: 'PRESENT', // They were present since they checked in
+              notes: record.notes
+                ? `${record.notes}\n[AUTO] Auto checkout at ${cutoffTime.toLocaleString()} - missing manual checkout`
+                : `[AUTO] Auto checkout at ${cutoffTime.toLocaleString()} - missing manual checkout`,
+              updatedAt: currentTime,
+            },
+          })
+
+          console.log(`Auto checkout for ${record.employee.employeeCode} - ${employeeName}`)
+        } else {
+          // No check-in at all - mark as absent
+          await prisma.attendanceRecord.update({
+            where: { id: record.id },
+            data: {
+              status: 'ABSENT',
+              notes: record.notes
+                ? `${record.notes}\n[AUTO] Marked absent - no check-in recorded on ${currentTime.toLocaleString()}`
+                : `[AUTO] Marked absent - no check-in recorded on ${currentTime.toLocaleString()}`,
+              updatedAt: currentTime,
+            },
+          })
+
+          console.log(`Marked absent ${record.employee.employeeCode} - ${employeeName} (no check-in)`)
+        }
 
         // Create audit log for this action
         await prisma.auditLog.create({

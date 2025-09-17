@@ -10,14 +10,32 @@ export class LeaveService {
     policy: LeavePolicy,
     asOfDate: Date = new Date()
   ): Promise<number> {
+    // Validate inputs
+    if (!employee || !policy) {
+      throw new Error('Employee and policy are required for leave accrual calculation')
+    }
+
+    if (!employee.joiningDate) {
+      throw new Error('Employee joining date is required for leave accrual calculation')
+    }
+
     const joiningDate = new Date(employee.joiningDate)
-    const currentDate = asOfDate
-    
+    const currentDate = new Date(asOfDate)
+
+    // Validate dates
+    if (isNaN(joiningDate.getTime()) || isNaN(currentDate.getTime())) {
+      throw new Error('Invalid dates provided for leave accrual calculation')
+    }
+
+    if (currentDate < joiningDate) {
+      return 0 // Cannot accrue leave before joining
+    }
+
     // Check if employee is still in probation period
     if (policy.probationPeriodDays && policy.probationPeriodDays > 0) {
       const probationEndDate = new Date(joiningDate)
       probationEndDate.setDate(probationEndDate.getDate() + policy.probationPeriodDays)
-      
+
       if (currentDate < probationEndDate) {
         return 0 // No leave accrual during probation
       }
@@ -337,5 +355,69 @@ export class LeaveService {
 
   private static getDaysInYear(year: number): number {
     return ((year % 4 === 0 && year % 100 !== 0) || year % 400 === 0) ? 366 : 365
+  }
+
+  /**
+   * Validate leave request for overlapping dates and sufficient balance
+   */
+  static async validateLeaveRequest(
+    employeeId: string,
+    policyId: string,
+    startDate: Date,
+    endDate: Date,
+    days: number,
+    excludeRequestId?: string
+  ): Promise<{ isValid: boolean; errors: string[] }> {
+    const errors: string[] = []
+
+    try {
+      // Check for overlapping leave requests
+      const overlappingRequests = await prisma.leaveRequest.findMany({
+        where: {
+          employeeId,
+          id: excludeRequestId ? { not: excludeRequestId } : undefined,
+          status: { in: ['PENDING', 'APPROVED'] },
+          OR: [
+            {
+              startDate: { lte: endDate },
+              endDate: { gte: startDate }
+            }
+          ]
+        }
+      })
+
+      if (overlappingRequests.length > 0) {
+        errors.push('Leave request overlaps with existing leave requests')
+      }
+
+      // Check leave balance
+      const currentYear = new Date().getFullYear()
+      const leaveBalance = await prisma.leaveBalance.findUnique({
+        where: {
+          employeeId_policyId_year: {
+            employeeId,
+            policyId,
+            year: currentYear
+          }
+        }
+      })
+
+      if (!leaveBalance) {
+        errors.push('Leave balance not found for the current year')
+      } else if (Number(leaveBalance.available) < days) {
+        errors.push(`Insufficient leave balance. Available: ${leaveBalance.available}, Requested: ${days}`)
+      }
+
+      return {
+        isValid: errors.length === 0,
+        errors
+      }
+    } catch (error) {
+      console.error('Error validating leave request:', error)
+      return {
+        isValid: false,
+        errors: ['Failed to validate leave request']
+      }
+    }
   }
 }

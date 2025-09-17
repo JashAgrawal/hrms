@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/auth"
 import { hasPermission, Permission } from "@/lib/permissions"
 import { UserRole } from "@prisma/client"
+import { z } from "zod"
 
 export interface ApiContext {
   user: {
@@ -115,26 +116,83 @@ export async function requirePermission(
 }
 
 /**
+ * Add security headers to response
+ */
+function addSecurityHeaders(response: NextResponse): NextResponse {
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  response.headers.set('X-Frame-Options', 'DENY')
+  response.headers.set('X-XSS-Protection', '1; mode=block')
+  response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+  response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+  return response
+}
+
+/**
+ * Input validation middleware
+ */
+export function withValidation<T>(schema: z.ZodSchema<T>) {
+  return function(
+    handler: (context: ApiContext, request: NextRequest, data: T, routeContext?: any) => Promise<NextResponse>
+  ) {
+    return async (context: ApiContext, request: NextRequest, routeContext?: any): Promise<NextResponse> => {
+      try {
+        let data: T
+
+        if (request.method === 'GET') {
+          const url = new URL(request.url)
+          const params = Object.fromEntries(url.searchParams.entries())
+          data = schema.parse(params)
+        } else {
+          const body = await request.json()
+          data = schema.parse(body)
+        }
+
+        return await handler(context, request, data, routeContext)
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          return NextResponse.json(
+            {
+              error: "Validation failed",
+              details: error.errors
+            },
+            { status: 400 }
+          )
+        }
+        throw error
+      }
+    }
+  }
+}
+
+/**
  * Higher-order function to create protected API route handlers
  */
 export function withAuth(
   handler: (context: ApiContext, request: NextRequest, routeContext?: any) => Promise<NextResponse>
 ) {
   return async (request: NextRequest, routeContext?: any): Promise<NextResponse> => {
+    // Apply rate limiting
+    const rateLimitResult = await rateLimit()(request)
+    if (rateLimitResult) {
+      return addSecurityHeaders(rateLimitResult)
+    }
+
     const authResult = await requireAuth(request)
-    
+
     if (authResult instanceof NextResponse) {
-      return authResult
+      return addSecurityHeaders(authResult)
     }
 
     try {
-      return await handler(authResult, request, routeContext)
+      const response = await handler(authResult, request, routeContext)
+      return addSecurityHeaders(response)
     } catch (error) {
       console.error("API handler error:", error)
-      return NextResponse.json(
+      const errorResponse = NextResponse.json(
         { error: "Internal server error" },
         { status: 500 }
       )
+      return addSecurityHeaders(errorResponse)
     }
   }
 }

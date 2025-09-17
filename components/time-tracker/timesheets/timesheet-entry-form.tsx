@@ -495,14 +495,15 @@ export function TimesheetEntryForm({
                       </div>
 
                       {/* Actions */}
-                      {!readonly && fields.length > 7 && (
+                      {!readonly && (
                         <div className="md:col-span-1 flex justify-end">
                           <Button
                             type="button"
                             variant="ghost"
                             size="sm"
                             onClick={() => remove(index)}
-                            disabled={fields.length <= 7}
+                            disabled={fields.length <= 1}
+                            className="text-destructive hover:text-destructive"
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>

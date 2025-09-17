@@ -31,9 +31,9 @@ POST /api/admin/attendance/mark-absent
 ```
 
 ### Automated Execution
-Set up a cron job to run daily at 12:05 PM:
+Set up a cron job to run daily after the cutoff time. Default is 6:05 PM:
 ```bash
-5 12 * * * curl -X POST "https://your-domain.com/api/admin/attendance/mark-absent"
+5 18 * * * curl -X POST "https://your-domain.com/api/admin/attendance/mark-absent"
 ```
 
 ## Permissions
@@ -46,4 +46,21 @@ Set up a cron job to run daily at 12:05 PM:
 - `lib/jobs/__tests__/attendance-absence-scheduler.test.ts` - Tests
 
 ## Configuration
-To change cutoff time, modify `cutoffTime.setHours(12, 0, 0, 0)` in the scheduler file.
+
+### Environment Variables
+Configure the attendance cutoff time using environment variables:
+
+```env
+# Attendance cutoff time (24-hour format)
+ATTENDANCE_CUTOFF_HOUR=18    # Default: 18 (6:00 PM)
+ATTENDANCE_CUTOFF_MINUTE=0   # Default: 0 (on the hour)
+```
+
+### Cron Job Schedule
+Update your cron job to run after the configured cutoff time:
+```bash
+# For 6:00 PM cutoff, run at 6:05 PM
+5 18 * * * curl -X POST "https://your-domain.com/api/admin/attendance/mark-absent"
+
+# For custom cutoff time, adjust accordingly
+```

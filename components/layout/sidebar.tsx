@@ -18,7 +18,8 @@ import {
   UserCheck,
   Briefcase,
   Megaphone,
-  FolderOpen
+  FolderOpen,
+  MapPin
 } from "lucide-react"
 import { Logo } from "@/components/shared/logo"
 import { cn } from "@/lib/utils"
@@ -76,6 +77,12 @@ const navigationItems: NavItem[] = [
         icon: Clock,
       },
       {
+        title: "Site Visits",
+        href: "/dashboard/site-visits",
+        icon: MapPin,
+        roles: ["ADMIN", "HR", "MANAGER"],
+      },
+      {
         title: "Attendance Reports",
         href: "/dashboard/attendance/reports",
         icon: FileText,
@@ -104,9 +111,21 @@ const navigationItems: NavItem[] = [
         icon: Clock,
       },
       {
+        title: "Manage Timesheets",
+        href: "/dashboard/time-tracker/timesheets/manage",
+        icon: UserCheck,
+        roles: ["ADMIN", "HR", "MANAGER"],
+      },
+      {
         title: "Projects",
         href: "/dashboard/time-tracker/projects",
         icon: FolderOpen,
+        roles: ["ADMIN", "HR", "MANAGER"],
+      },
+      {
+        title: "Reports",
+        href: "/dashboard/time-tracker/reports",
+        icon: FileText,
         roles: ["ADMIN", "HR", "MANAGER"],
       },
     ],

@@ -59,20 +59,20 @@ export default function TimeTrackerDashboard() {
         }
 
         // Fetch recent timesheet activities
-        const activitiesResponse = await fetch('/api/timesheets?limit=5&orderBy=updatedAt')
+        const activitiesResponse = await fetch('/api/timesheets?limit=5')
         if (activitiesResponse.ok) {
           const activitiesData = await activitiesResponse.json()
           const activities = (activitiesData.timesheets || []).map((timesheet: any) => ({
             id: timesheet.id,
             type: 'timesheet',
             title: `${timesheet.status === 'SUBMITTED' ? 'Submitted' : timesheet.status === 'APPROVED' ? 'Approved' : 'Draft'} Timesheet`,
-            description: `Week of ${new Date(timesheet.startDate).toLocaleDateString()} - ${new Date(timesheet.endDate).toLocaleDateString()} • ${timesheet.totalHours} hours`,
+            description: `Week of ${new Date(timesheet.startDate).toLocaleDateString()} - ${new Date(timesheet.endDate).toLocaleDateString()} • ${timesheet.totalHours || 0} hours`,
             date: timesheet.updatedAt,
             status: timesheet.status
           }))
           setRecentActivity(activities)
         } else {
-          console.error('Failed to fetch timesheet activities')
+          console.error('Failed to fetch timesheet activities:', await activitiesResponse.text())
         }
       } catch (error) {
         console.error('Error fetching timesheet dashboard data:', error)
@@ -218,10 +218,12 @@ export default function TimeTrackerDashboard() {
                 View Projects
               </Button>
             </Link>
-            <Button variant="outline" className="w-full justify-start">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              View Reports
-            </Button>
+            <Link href="/dashboard/time-tracker/reports">
+              <Button variant="outline" className="w-full justify-start">
+                <BarChart3 className="h-4 w-4 mr-2" />
+                View Reports
+              </Button>
+            </Link>
           </CardContent>
         </Card>
 

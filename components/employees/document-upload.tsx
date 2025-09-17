@@ -133,6 +133,7 @@ export function DocumentUpload({
       if (document.file) {
         formData.append('file', document.file)
         formData.append('category', document.category)
+        formData.append('title', document.name) // Add title field
         if (employeeId) {
           formData.append('employeeId', employeeId)
         }
@@ -144,7 +145,8 @@ export function DocumentUpload({
       })
 
       if (!response.ok) {
-        throw new Error('Upload failed')
+        const errorData = await response.json().catch(() => ({ error: 'Upload failed' }))
+        throw new Error(errorData.error || `Upload failed with status ${response.status}`)
       }
 
       const result = await response.json()
@@ -162,10 +164,11 @@ export function DocumentUpload({
       toast.success(`${document.name} uploaded successfully`)
     } catch (error) {
       console.error('Upload error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Upload failed'
       setDocuments(prev => prev.map((doc, i) => 
-        i === index ? { ...doc, status: 'rejected', rejectionReason: 'Upload failed' } : doc
+        i === index ? { ...doc, status: 'rejected', rejectionReason: errorMessage } : doc
       ))
-      toast.error(`Failed to upload ${document.name}`)
+      toast.error(`Failed to upload ${document.name}: ${errorMessage}`)
     }
   }
 

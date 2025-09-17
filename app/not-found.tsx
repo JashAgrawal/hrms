@@ -31,7 +31,7 @@ export default function NotFound() {
               Page Not Found
             </CardTitle>
             <CardDescription className="text-lg text-muted-foreground max-w-md mx-auto">
-              The page you're looking for doesn't exist or has been moved to a different location.
+              The page you&apos;re looking for doesn&apos;t exist or has been moved to a different location.
             </CardDescription>
           </CardHeader>
 
@@ -49,7 +49,7 @@ export default function NotFound() {
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary mt-1">•</span>
-                  Use the navigation menu to find what you're looking for
+                  Use the navigation menu to find what you&apos;re looking for
                 </li>
                 <li className="flex items-start gap-2">
                   <span className="text-primary mt-1">•</span>

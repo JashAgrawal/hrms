@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client'
 import bcrypt from 'bcryptjs'
 import seedPayrollData from './seed-payroll'
+import seedEmployees from './seed-employees'
 
 const prisma = new PrismaClient()
 
@@ -1369,6 +1370,9 @@ async function main() {
 
   // Seed payroll data
   await seedPayrollData()
+
+  // Seed additional employees
+  await seedEmployees()
 
   console.log('🎉 Seeding completed successfully!')
   console.log('\n📋 Test Credentials:')

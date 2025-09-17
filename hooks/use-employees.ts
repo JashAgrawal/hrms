@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 export interface Employee {
   id: string
   employeeCode: string
@@ -33,7 +33,7 @@ export function useEmployees(options: UseEmployeesOptions = {}): UseEmployeesRet
   // Extract options to avoid dependency issues
   const { includeInactive, department, limit } = options
 
-  const fetchEmployees = async () => {
+  const fetchEmployees = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -44,7 +44,7 @@ export function useEmployees(options: UseEmployeesOptions = {}): UseEmployeesRet
       if (limit) params.set('limit', limit.toString())
 
       const response = await fetch(`/api/employees?${params.toString()}`)
-      
+
       if (!response.ok) {
         throw new Error('Failed to fetch employees')
       }
@@ -56,11 +56,11 @@ export function useEmployees(options: UseEmployeesOptions = {}): UseEmployeesRet
     } finally {
       setLoading(false)
     }
-  }
+  }, [includeInactive, department, limit])
 
   useEffect(() => {
     fetchEmployees()
-  }, [includeInactive, department, limit])
+  }, [includeInactive, department, limit, fetchEmployees]) // Added fetchEmployees to dependencies
 
   return {
     employees,

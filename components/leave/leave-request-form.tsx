@@ -120,7 +120,7 @@ export function LeaveRequestForm({ onSuccess, onCancel }: LeaveRequestFormProps)
     }
 
     fetchData()
-  }, [toast])
+  }, []) // Removed toast dependency as it's stable and doesn't need to trigger re-fetch
 
   // Update selected policy and balance when policy changes
   useEffect(() => {

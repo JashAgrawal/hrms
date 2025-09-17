@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Button } from '@/components/ui/button'
+import Image from 'next/image'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
@@ -610,9 +611,11 @@ export function ExpenseClaimForm({
                       </div>
                       {attachment.preview && (
                         <div className="mt-2">
-                          <img
+                          <Image
                             src={attachment.preview}
                             alt={attachment.name}
+                            width={200}
+                            height={80}
                             className="w-full h-20 object-cover rounded"
                           />
                         </div>
